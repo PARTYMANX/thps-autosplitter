@@ -85,7 +85,7 @@ pub async fn run(process: &Process, process_name: &str) {
             },
             TimerState::Paused | TimerState::Running => {
                 // split on level changes (except skateshop)
-                if current_state.level_name != prev_state.level_name && current_state.level_name != "skateshop" {
+                if !current_state.level_name.is_empty() && current_state.level_name != prev_state.level_name && current_state.level_name != "skateshop" {
                     asr::timer::split();
                     asr::print_message(format!("Changed level; splitting timer...").as_str());
                 }

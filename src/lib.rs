@@ -1,5 +1,6 @@
 use asr::{Process};
 
+mod thps3;
 mod thps4;
 
 asr::async_main!(stable);
@@ -12,7 +13,10 @@ async fn main() {
             PROCESS_NAMES.iter().find_map(|(name, game)| Some((name, game, Process::attach(name)?)))
          }).await;
         process.until_closes(async {
+            asr::print_message(format!("Detected {}", name).as_str());
+
             match game {
+                Game::THPS3 => thps3::run(&process, name).await,
                 Game::THPS4 => thps4::run(&process, name).await,
             }
             
@@ -28,7 +32,7 @@ async fn main() {
 enum Game {
     // THPS,    // emulated, not sure how viable it is
     // THPS2,
-    // THPS3,
+    THPS3,
     THPS4,
     // THUG1,
     // THUG2,
@@ -37,7 +41,9 @@ enum Game {
     // THPS12,
 }
 
-const PROCESS_NAMES: [(&str, Game); 2] = [
+const PROCESS_NAMES: [(&str, Game); 4] = [
+    ("Skate3.exe", Game::THPS3),
+    ("THPS3.exe", Game::THPS3),
     ("Skate4.exe", Game::THPS4),
     ("THPS4.exe", Game::THPS4),
 ];

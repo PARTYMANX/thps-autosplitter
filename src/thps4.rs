@@ -8,37 +8,29 @@ struct State {
 
 impl State {
     pub fn update(process: &Process, base_addr: Address) -> Self {
-        let mut level_name = "".to_string();
-        let mut pro_points = 0;
-        let mut is_loading = false;
-
-        match process.read::<ArrayCString<16>>(base_addr + 0x6B6BF0 as u32) {
-            Ok(v) => {
-                match String::from_utf8(v.as_bytes().to_vec()) {
-                    Ok(v) => level_name = v,
-                    Err(err) => asr::print_message(format!("Error reading level name: {:?}", err).as_str()),
-                }
-            } 
-            //Err(err) => asr::print_message(format!("Error reading level name: {:?}", err).as_str()),
-            Err(_) => {}    // do nothing, we most likely lost the process
-        }
-
-        match process.read_pointer_path32::<u8>(base_addr, &vec!(0x6B5B48 as u32, 0x86c as u32, 0x20 as u32)) {
-            Ok(v) => pro_points = v,
-            //Err(err) => asr::print_message(format!("Error reading pro points: {:?}", err).as_str()),
-            Err(_) => {}    // do nothing, we either lost the process or don't have a career initialized
-        }
-
-        match process.read::<bool>(base_addr + 0x6728C0 as u32) {
-            Ok(v) => is_loading = v,
-            //Err(err) => asr::print_message(format!("Error reading is loading: {:?}", err).as_str()),
-            Err(_) => {}    // do nothing, we probably lost the process
-        }
-
         State {
-            level_name: level_name,
-            pro_points: pro_points,
-            is_loading: is_loading,
+            level_name: match process.read::<ArrayCString<16>>(base_addr + 0x6B6BF0 as u32) {
+                Ok(v) => {
+                    match String::from_utf8(v.as_bytes().to_vec()) {
+                        Ok(v) => v,
+                        Err(err) => {
+                            asr::print_message(format!("Error reading level name: {:?}", err).as_str());
+                            "".to_string()
+                        },
+                    }
+                },
+                Err(_) => "".to_string(),
+            },
+
+            pro_points: match process.read_pointer_path32::<u8>(base_addr, &vec!(0x6B5B48 as u32, 0x86c as u32, 0x20 as u32)) {
+                Ok(v) => v,
+                Err(_) => 0,
+            },
+
+            is_loading: match process.read::<bool>(base_addr + 0x6728C0 as u32) {
+                Ok(v) => v,
+                Err(_) => false,
+            }
         }
     }
 }
@@ -54,18 +46,6 @@ pub async fn run(process: &Process, process_name: &str) {
     loop {
         // update vars
         let current_state = State::update(process, base_addr);
-
-        if current_state.level_name != prev_state.level_name {
-            asr::print_message(format!("Level changed to {}!", current_state.level_name).as_str());
-        }
-
-        if current_state.pro_points != prev_state.pro_points {
-            asr::print_message(format!("Pro points changed to {}!", current_state.pro_points).as_str());
-        }
-
-        if current_state.is_loading != prev_state.is_loading {
-            asr::print_message(format!("Is loading changed to {}!", current_state.is_loading).as_str());
-        }
 
         // pause game time when loading, resume when done
         if current_state.is_loading && !prev_state.is_loading {

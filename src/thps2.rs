@@ -1,8 +1,6 @@
-use std::thread::current;
+use asr::{Address, Process, timer::TimerState, time::Duration};
 
-use asr::{Address, Process, string::ArrayCString, timer::TimerState};
-
-// looking for things:
+// looking for things TODO: implement these alternate offsets based off of the Activision Value release executable:
 // level 0x561c90 / 0x161c90
 // also possibly 0x56a898
 // mode 0x561c74 / 0x161c74
@@ -17,16 +15,12 @@ use asr::{Address, Process, string::ArrayCString, timer::TimerState};
 // 0x568a6c + (skater id * 0x104) gets you career?
 
 struct State {
-    level_name: String,
-    comp_cash: i32,
-    is_loading: bool,
-    is_paused: bool,
-    is_timer_paused: bool,
     is_timer_running: bool,
+    timer_vblanks: u32,
     level_id: u8,
     mode: u8,
     screen: u8,
-    gold_count: u32,
+    _gold_count: u32,
     medal_count: u32,
     goal_count: u8,
 }
@@ -96,39 +90,6 @@ impl State {
         }
 
         State {
-            level_name: match process.read::<ArrayCString<16>>(base_addr + 0x29D198 as u32) {
-                Ok(v) => {
-                    match String::from_utf8(v.as_bytes().to_vec()) {
-                        Ok(v) => v,
-                        Err(err) => {
-                            asr::print_message(format!("Error reading level name: {:?}", err).as_str());
-                            "".to_string()
-                        },
-                    }
-                },
-                Err(_) => "".to_string(),
-            },
-
-            comp_cash: match process.read::<i32>(base_addr + 0x15CB8C as u32) {
-                Ok(v) => v,
-                Err(_) => 0,
-            },
-
-            is_loading: match process.read::<bool>(base_addr + 0x15E864 as u32) {
-                Ok(v) => v,
-                Err(_) => false,
-            },
-
-            is_paused: match process.read::<bool>(base_addr + 0x15E864 as u32) {
-                Ok(v) => v,
-                Err(_) => false,
-            },
-
-            is_timer_paused: match process.read::<bool>(base_addr + 0x29E050 as u32) {
-                Ok(v) => v,
-                Err(_) => false,
-            },
-
             is_timer_running: match process.read::<bool>(base_addr + 0x16B238 as u32) {
                 Ok(v) => v,
                 Err(_) => false,
@@ -149,7 +110,31 @@ impl State {
                 Err(_) => 0,
             },
 
-            gold_count: gold_count,
+            // used for igt only, so clamp it to max run time
+            timer_vblanks: match process.read::<u32>(base_addr + 0x16af80 as u32) {
+                Ok(v) => {
+                    let level_id = match process.read::<u32>(base_addr + 0x15e8f0 as u32) {
+                        Ok(v) => v.clamp(0, 13),
+                        Err(_) => 0,
+                    };
+
+                    let is_comp = match process.read::<bool>(base_addr + 0x139040 + (level_id * 0x1ac) as u32) {
+                        Ok(v) => v,
+                        Err(_) => false,
+                    };
+    
+                    let max_time = if is_comp {
+                        1 * 60 * 60 // 1 minutes * 60 seconds * 60 vblanks/sec
+                    } else {
+                        2 * 60 * 60 // 2 minutes * 60 seconds * 60 vblanks/sec
+                    };
+
+                    (v + 30).clamp(0, max_time)   // timer sticks at 2:00 for half a second, add 30 vblanks to account for this
+                },
+                Err(_) => 0,
+            },
+
+            _gold_count: gold_count,
             medal_count: medal_count,
             goal_count: goal_count,
         }
@@ -166,47 +151,12 @@ pub async fn run(process: &Process, process_name: &str) {
     let mut game_done = false;
     let mut level_changed = false;
 
+    let mut igt_accumulator: i64 = 0;   // igt in seconds
+    let mut prev_igt = Duration::seconds(-1);
+
     loop {
         // update vars
         let current_state = State::update(process, base_addr);
-
-        if current_state.gold_count != prev_state.gold_count {
-            asr::print_message(format!("GOLD COUNT CHANGED TO {}", current_state.gold_count).as_str());
-        }
-        if current_state.medal_count != prev_state.medal_count {
-            asr::print_message(format!("MEDAL COUNT CHANGED TO {}", current_state.medal_count).as_str());
-        }
-        if current_state.goal_count != prev_state.goal_count {
-            asr::print_message(format!("GOAL COUNT CHANGED TO {}", current_state.goal_count).as_str());
-        }
-
-        if current_state.screen != prev_state.screen {
-            asr::print_message(format!("SCREEN CHANGED TO {}", current_state.screen).as_str());
-        }
-
-        if current_state.mode != prev_state.mode {
-            asr::print_message(format!("MODE CHANGED TO {}", current_state.mode).as_str());
-        }
-
-        if current_state.level_id != prev_state.level_id {
-            asr::print_message(format!("LEVEL CHANGED TO {}", current_state.level_id).as_str());
-        }
-
-        if current_state.screen != 6 && State::check_for_reset(process, base_addr) {
-            //asr::print_message(format!("WE SHOULD BE RESETTING").as_str());
-        }
-
-        if current_state.is_timer_paused != prev_state.is_timer_paused {
-            //asr::print_message(format!("TIMER PAUSE STATE CHANGED TO {}", current_state.is_timer_paused).as_str());
-        }
-
-        if current_state.is_timer_running != prev_state.is_timer_running {
-            asr::print_message(format!("TIMER STATE CHANGED TO {}", current_state.is_timer_running).as_str());
-        }
-
-        if current_state.is_paused != prev_state.is_paused {
-            //asr::print_message(format!("PAUSE STATE CHANGED TO {}", current_state.is_paused).as_str());
-        }
 
         match asr::timer::state() {
             TimerState::NotRunning => {
@@ -217,6 +167,9 @@ pub async fn run(process: &Process, process_name: &str) {
                 if current_state.mode == 1 && current_state.goal_count == 0 && current_state.level_id == 0 && current_state.is_timer_running {
                     asr::timer::start();
                     asr::print_message(format!("Starting timer...").as_str());
+
+                    asr::timer::pause_game_time();
+                    igt_accumulator = 0;
                 }
             },
             TimerState::Paused | TimerState::Running => {
@@ -231,17 +184,39 @@ pub async fn run(process: &Process, process_name: &str) {
                     asr::print_message(format!("Changed levels; splitting timer...").as_str());
                 }
 
-                // split when all medals collected
+                // split when all medals collected 
+                // TODO: add setting to only split when all goals and goals are collected
                 if !game_done && current_state.medal_count == 3 {
                     game_done = true;
                     asr::timer::split();
-                    asr::print_message(format!("Collected all goals and golds; splitting timer...").as_str());
+                    asr::print_message(format!("Collected all medals; splitting timer...").as_str());
                 }
 
-                // split when on a menu and no goals are complete on any skater
+                // reset when on a menu and no goals are complete on any skater
                 if current_state.screen != 6 && State::check_for_reset(process, base_addr) {
                     asr::timer::reset();
                     asr::print_message(format!("Resetting timer...").as_str());
+
+                    prev_igt = Duration::seconds(-1);
+                    asr::timer::resume_game_time();
+                }
+
+                // calculate igt
+                // commit run's time when either the timer has stopped (run ended) or current time is lower than previous while timer is running
+                if (!current_state.is_timer_running && prev_state.is_timer_running) || (current_state.timer_vblanks < prev_state.timer_vblanks && prev_state.is_timer_running) {
+                    igt_accumulator += prev_state.timer_vblanks as i64 / 60;
+                }
+
+                let igt_duration = if current_state.is_timer_running {
+                    Duration::seconds(igt_accumulator + (current_state.timer_vblanks as i64 / 60))
+                } else {
+                    Duration::seconds(igt_accumulator)
+                };
+
+                // prevent excess messaging and only send igt when relevant
+                if igt_duration != prev_igt {
+                    prev_igt = igt_duration;
+                    asr::timer::set_game_time(igt_duration);
                 }
             },
             TimerState::Ended | TimerState::Unknown | _ => {

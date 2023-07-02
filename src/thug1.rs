@@ -102,7 +102,7 @@ pub async fn run(process: &Process, process_name: &str) {
                     asr::print_message(format!("Final cutscene; splitting timer...").as_str());
                 }
 
-                // reset when on skateshop with 0 pro points
+                // reset when on main menu
                 if current_state.level_name == "skateshop" && prev_state.level_name != "skateshop" {
                     asr::timer::reset();
                     asr::print_message(format!("Resetting timer...").as_str());

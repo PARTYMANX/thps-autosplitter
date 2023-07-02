@@ -14,6 +14,8 @@ use asr::{Address, Process, timer::TimerState, time::Duration};
 // orig line: 0x56c580 + 4 + *(0x56c580 + 100) + 0xc <- this appears to be the skater id
 // 0x568a6c + (skater id * 0x104) gets you career?
 
+// Loading = 0x55e230
+
 struct State {
     is_timer_running: bool,
     timer_vblanks: u32,

@@ -5,6 +5,8 @@ mod thps3;
 mod thps4;
 mod thug1;
 
+mod thaw;
+
 asr::async_main!(stable);
 
 async fn main() {
@@ -22,6 +24,7 @@ async fn main() {
                 Game::THPS3 => thps3::run(&process, name).await,
                 Game::THPS4 => thps4::run(&process, name).await,
                 Game::THUG1 => thug1::run(&process, name).await,
+                Game::THAW => thaw::run(&process, name).await,
             }
             
             asr::future::next_tick().await;
@@ -40,12 +43,12 @@ enum Game {
     THPS4,
     THUG1,
     // THUG2,
-    // THAW,
+    THAW,
     // THPSHD,
     // THPS12,
 }
 
-const PROCESS_NAMES: [(&str, Game); 7] = [
+const PROCESS_NAMES: [(&str, Game); 9] = [
     ("THawk2.exe", Game::THPS2),
     ("Skate3.exe", Game::THPS3),
     ("THPS3.exe", Game::THPS3),
@@ -53,4 +56,6 @@ const PROCESS_NAMES: [(&str, Game); 7] = [
     ("THPS4.exe", Game::THPS4),
     ("THUG.exe", Game::THUG1),
     ("THUGONE.exe", Game::THUG1),
+    ("THAW.exe", Game::THAW),
+    ("THAWPM.exe", Game::THAW),
 ];

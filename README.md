@@ -11,3 +11,5 @@ Currently, the autosplitter supports the following games:
 * Tony Hawk's Pro Skater 3 (Original Release 1.01 (i think. it's dicey) and PARTYMOD)
 * Tony Hawk's Pro Skater 4 (Original US Release and PARTYMOD)
 * Tony Hawk's Underground (Original Release and ClownJob'd)
+* Tony Hawk's Underground 2 (Original Release and ClownJob'd)
+* Tony Hawk's Pro Skater 1 + 2 (Final Release)

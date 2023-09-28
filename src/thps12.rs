@@ -1,7 +1,87 @@
 use std::collections::HashMap;
 
-use asr::{Address, Process, timer::TimerState};
+use asr::{Address, Process, timer::TimerState, signature::Signature};
 use once_cell::sync::Lazy;
+
+// PATTERNS
+// FNamePool = "74 09 48 8D 15 ?? ?? ?? ?? EB 16", 0x5
+// UWorld = "0F 2E ?? 74 ?? 48 8B 1D ?? ?? ?? ?? 48 85 DB 74", 0x8
+// LOADING = 4D 85 C0 75 4F 48 83 3D ?? ?? ?? ?? 00 75 3E, 0x8
+// CAREER = "48 8B 5C 24 20 48 8D 05 ?? ?? ?? ?? 48 83 C4 28 c3", 0x8
+// 
+// RUN_STATE = 4C 89 44 24 28 48 89 05 ?? ?? ?? ?? 48 8D 0D, 0x8
+// what are the chances any of these survive
+
+struct Offsets {
+    fnamepool: u64,
+    uworld: u64,
+    loading: u64,
+    career: u64,
+    run_state: u64,
+}
+
+impl Offsets {
+    pub fn get(process: &Process, base_addr: Address, module_size: u64) -> Self {
+        let fnamepool_ptr: Address = match Signature::<11>::new("74 09 48 8D 15 ?? ?? ?? ?? EB 16").scan_process_range(process, (base_addr, module_size)) {
+            Some(v) => v + 5,
+            None => {
+                asr::print_message("Failed to get FNamePool address!!");
+                Address::from(0 as u64)
+            }
+        };
+        let uworld_ptr: Address = match Signature::<16>::new("0F 2E ?? 74 ?? 48 8B 1D ?? ?? ?? ?? 48 85 DB 74").scan_process_range(process, (base_addr, module_size)) {
+            Some(v) => v + 8,
+            None => {
+                asr::print_message("Failed to get UWorld address!!");
+                Address::from(0 as u64)
+            }
+        };
+        let loading_ptr: Address = match Signature::<15>::new("4D 85 C0 75 4F 48 83 3D ?? ?? ?? ?? 00 75 3E").scan_process_range(process, (base_addr, module_size)) {
+            Some(v) => v + 8,
+            None => {
+                asr::print_message("Failed to get loading address!!");
+                Address::from(0 as u64)
+            }
+        };
+        let career_ptr: Address = match Signature::<26>::new("75 DF 48 8D 05 ?? ?? ?? ?? 48 89 5C 24 20 33 dB C7 05 ?? ?? ?? ?? FF FF FF FF").scan_process_range(process, (base_addr, module_size)) {
+            Some(v) => v + 18,  // (or add 32 (and add D0 to pointer))
+            None => {
+                asr::print_message("Failed to get career address!!");
+                Address::from(0 as u64)
+            }
+        };
+        let run_state_ptr: Address = match Signature::<15>::new("4C 89 44 24 28 48 89 05 ?? ?? ?? ?? 48 8D 0D").scan_process_range(process, (base_addr, module_size)) {
+            Some(v) => v + 8,
+            None => {
+                asr::print_message("Failed to get run state address!!");
+                Address::from(0 as u64)
+            }
+        };
+
+        Offsets {
+            fnamepool: match process.read::<i32>(fnamepool_ptr) {
+                Ok(v) => (fnamepool_ptr.value() + 0x4 + v as u64) - base_addr.value(),
+                Err(_) => 0,
+            },
+            uworld: match process.read::<i32>(uworld_ptr) {
+                Ok(v) => (uworld_ptr.value() + 0x4 + v as u64) - base_addr.value(),
+                Err(_) => 0,
+            },
+            loading: match process.read::<i32>(loading_ptr) {
+                Ok(v) => (loading_ptr.value() + 0x5 + v as u64) - base_addr.value(),
+                Err(_) => 0,
+            },
+            career: match process.read::<i32>(career_ptr) {
+                Ok(v) => ((career_ptr.value() + 0x8 + v as u64) - base_addr.value()) + 0xA0,
+                Err(_) => 0,
+            },
+            run_state: match process.read::<i32>(run_state_ptr) {
+                Ok(v) => (run_state_ptr.value() + 0x4 + v as u64) - base_addr.value(),
+                Err(_) => 0,
+            },
+        }
+    }
+}
 
 struct State {
     level_name: String,
@@ -13,7 +93,7 @@ struct State {
 
 // Translate an Unreal FName object to its string
 // heavily inspired by the autosplitter for Stray (https://github.com/Micrologist/LiveSplit.Stray/blob/main/stray.asl)
-fn get_fname(process: &Process, base_addr: Address, id: u64) -> String {
+fn get_fname(process: &Process, base_addr: Address, offsets: &Offsets, id: u64) -> String {
     if id == 0 {
         return "".to_string();
     }
@@ -23,7 +103,7 @@ fn get_fname(process: &Process, base_addr: Address, id: u64) -> String {
     let chunk_offset = key >> 16;
     let name_offset = key & u16::MAX as u32;
 
-    let name_entry = match process.read_pointer_path64::<i16>(base_addr, &vec!(0x3C97840 as u64 + ((chunk_offset * 0x8) + 0x10) as u64, (name_offset * 0x2) as u64)) {
+    let name_entry = match process.read_pointer_path64::<i16>(base_addr, &vec!(offsets.fnamepool as u64 + ((chunk_offset * 0x8) + 0x10) as u64, (name_offset * 0x2) as u64)) {
         Ok(v) => v,
         Err(_) => 0,
     };
@@ -32,7 +112,7 @@ fn get_fname(process: &Process, base_addr: Address, id: u64) -> String {
 
     let mut result_bytes = vec!();
     for i in 0..name_length {
-        let c = match process.read_pointer_path64::<u8>(base_addr, &vec!(0x3C97840 as u64 + ((chunk_offset * 0x8) + 0x10) as u64, ((name_offset * 0x2) + 2 + i as u32) as u64)) {
+        let c = match process.read_pointer_path64::<u8>(base_addr, &vec!(offsets.fnamepool as u64 + ((chunk_offset * 0x8) + 0x10) as u64, ((name_offset * 0x2) + 2 + i as u32) as u64)) {
             Ok(v) => v,
             Err(_) => 0,
         };
@@ -58,14 +138,14 @@ struct Career {
 }
 
 impl Career {
-    pub fn new(process: &Process, base_addr: Address, skater_fname: u64) -> Self {
+    pub fn new(process: &Process, base_addr: Address, offsets: &Offsets, skater_fname: u64) -> Self {
         let goals = vec![vec![false; 10]; 17];
 
         let mut result = Self {
             goals: goals,
         };
 
-        result.update(process, base_addr, skater_fname, 0);
+        result.update(process, base_addr, offsets, skater_fname, 0);
 
         result
     }
@@ -78,17 +158,17 @@ impl Career {
         }
     }
 
-    pub fn update(&mut self, process: &Process, base_addr: Address, skater_fname: u64, old_count: u32) {
+    pub fn update(&mut self, process: &Process, base_addr: Address, offsets: &Offsets, skater_fname: u64, old_count: u32) {
         // collect all completed goals and apply them to the career goals
         // go through each career until you find the one for the expected skater
-        let career_count = match process.read_pointer_path64::<u32>(base_addr, &vec!(0x3d78170 as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xd8 as u64)) {
+        let career_count = match process.read_pointer_path64::<u32>(base_addr, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xd8 as u64)) {
             Ok(v) => v,
             Err(_) => 0,
         };
 
         let mut career_offset = -1;
         for i in 0..career_count {
-            let career_fname = match process.read_pointer_path64::<u64>(base_addr, &vec!(0x3d78170 as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (i * 0x60) as u64)) {
+            let career_fname = match process.read_pointer_path64::<u64>(base_addr, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (i * 0x60) as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             };
@@ -99,18 +179,18 @@ impl Career {
         }
 
         if career_offset != -1 {
-            let goal_count = match process.read_pointer_path64::<u32>(base_addr, &vec!(0x3d78170 as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (career_offset as u64 * 0x60) + 0x10 as u64)) {
+            let goal_count = match process.read_pointer_path64::<u32>(base_addr, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (career_offset as u64 * 0x60) + 0x10 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             };
 
             for i in old_count..goal_count {
-                let goal_fname = match process.read_pointer_path64::<u64>(base_addr, &vec!(0x3d78170 as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (career_offset as u64 * 0x60) + 0x8 as u64, (i as u64 * 0x30) + 0x10 as u64)) {
+                let goal_fname = match process.read_pointer_path64::<u64>(base_addr, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (career_offset as u64 * 0x60) + 0x8 as u64, (i as u64 * 0x30) + 0x10 as u64)) {
                     Ok(v) => v,
                     Err(_) => 0,
                 };
 
-                let (level, idx) = GOAL_TABLE[get_fname(process, base_addr, goal_fname).as_str()];
+                let (level, idx) = GOAL_TABLE[get_fname(process, base_addr, offsets, goal_fname).as_str()];
 
                 self.goals[level as usize][idx as usize] = true;
             }
@@ -119,23 +199,24 @@ impl Career {
 }
 
 impl State {
-    pub fn update(process: &Process, base_addr: Address) -> Self {
+    pub fn update(process: &Process, base_addr: Address, offsets: &Offsets) -> Self {
         // name ID of skater, but that does not matter, we just need to match it to the career
-        let skater_fname = match process.read_pointer_path64::<u64>(base_addr, &vec!(0x3d78170 as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0x130 as u64)) {
+        //let skater_fname = match process.read_pointer_path64::<u64>(base_addr, &vec!(0x3d78170 as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0x130 as u64)) {
+        let skater_fname = match process.read_pointer_path64::<u64>(base_addr, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0x130 as u64)) {
             Ok(v) => v,
             Err(_) => 0,
         };
 
         // lol this is very stupid, but I can't find any other way to do it!
         // go through each career until you find the one for the expected skater
-        let career_count = match process.read_pointer_path64::<u32>(base_addr, &vec!(0x3d78170 as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xd8 as u64)) {
+        let career_count = match process.read_pointer_path64::<u32>(base_addr, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xd8 as u64)) {
             Ok(v) => v,
             Err(_) => 0,
         };
 
         let mut career_offset = -1;
         for i in 0..career_count {
-            let career_fname = match process.read_pointer_path64::<u64>(base_addr, &vec!(0x3d78170 as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (i * 0x60) as u64)) {
+            let career_fname = match process.read_pointer_path64::<u64>(base_addr, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (i * 0x60) as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             };
@@ -147,19 +228,40 @@ impl State {
 
         let mut goal_count = 0;
         if career_offset != -1 {
-            goal_count = match process.read_pointer_path64::<u32>(base_addr, &vec!(0x3d78170 as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (career_offset as u64 * 0x60) + 0x10 as u64)) {
+            goal_count = match process.read_pointer_path64::<u32>(base_addr, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (career_offset as u64 * 0x60) + 0x10 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             };
         }
 
-        let level_fname = match process.read_pointer_path64::<u64>(base_addr, &vec!(0x3D98888 as u64, 0x18 as u64)) {
+        let level_fname = match process.read_pointer_path64::<u64>(base_addr, &vec!(offsets.uworld as u64, 0x18 as u64)) {
             Ok(v) => v,
             Err(_) => 0,
         };
 
+        let msg_len = match process.read_pointer_path64::<u8>(base_addr, &vec!(offsets.run_state as u64 + 0xD1)) {
+            Ok(v) => v,
+            Err(_) => 0,
+        };
+
+        let mut msg_bytes = vec!();
+        for i in 0..msg_len {
+            let c = match process.read_pointer_path64::<u8>(base_addr, &vec!(offsets.run_state as u64 + 0xD2 + i as u64)) {
+                Ok(v) => v,
+                Err(_) => 0,
+            };
+            msg_bytes.push(c);
+        }
+
+        let msg = match std::str::from_utf8(&msg_bytes) {
+            Ok(v) => v,
+            Err(_) => "",
+        }.to_string();
+
+        //asr::print_message(&format!("MESSAGE: {} {}", msg_len, msg));
+
         State {
-            level_name: get_fname(process, base_addr, level_fname),
+            level_name: get_fname(process, base_addr, &offsets, level_fname),
 
             goal_count: goal_count,
 
@@ -167,15 +269,12 @@ impl State {
 
             // this is some message buffer or something.  we're just grabbing a convenient byte that happens to be 0 when a run is over.  
             // for completeness' sake, this seems to change mainly for 3 messages: match_start (1), match_end (0), goal_completed (49?)
-            is_running: match process.read_pointer_path64::<u8>(base_addr, &vec!(0x3B0EE4B as u64)) {
-                Ok(v) => v != 0,
-                Err(_) => false,
-            },
+            is_running: msg == "dlog_event_client_match_start",
 
-            is_loading: match process.read_pointer_path64::<bool>(base_addr, &vec!(0x3DB7CA0 as u64, 0xb0)) {
+            is_loading: match process.read_pointer_path64::<bool>(base_addr, &vec!(offsets.loading as u64, 0xb0)) {
                 Ok(v) => !v,
                 Err(_) => false,
-            }
+            },
         }
     }
 }
@@ -185,9 +284,19 @@ pub async fn run(process: &Process, process_name: &str) {
     asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
 
     let base_addr = process.get_module_address(process_name).unwrap();
+    let module_size = process.get_module_size(process_name).unwrap();
 
-    let mut prev_state = State::update(process, base_addr);
-    let mut career = Career::new(process, base_addr,prev_state.skater);
+    asr::print_message("Finding offsets...");
+    let offsets = Offsets::get(process, base_addr, module_size);
+    asr::print_message(&format!("FNAMEPOOL ADDR: {:#018x}", offsets.fnamepool));
+    asr::print_message(&format!("UWORLD ADDR: {:#018x}", offsets.uworld));
+    asr::print_message(&format!("LOADING ADDR: {:#018x}", offsets.loading));
+    asr::print_message(&format!("CAREER ADDR: {:#018x}", offsets.career));
+    asr::print_message(&format!("RUN STATE ADDR: {:#018x}", offsets.run_state));
+    asr::print_message("Offsets found!");
+
+    let mut prev_state = State::update(process, base_addr, &offsets);
+    let mut career = Career::new(process, base_addr, &offsets, prev_state.skater);
 
     let mut roswell_medal = false;
     let mut bullring_medal = false;
@@ -195,7 +304,7 @@ pub async fn run(process: &Process, process_name: &str) {
 
     loop {
         // update vars
-        let mut current_state = State::update(process, base_addr);
+        let mut current_state = State::update(process, base_addr, &offsets);
 
         // if we see an invalid level name, fill in the previous
         if current_state.level_name.is_empty() {
@@ -210,9 +319,9 @@ pub async fn run(process: &Process, process_name: &str) {
                 bullring_medal = false;
                 starting_game = false;
                 career.reset();
-                career.update(process, base_addr, current_state.skater, 0);
+                career.update(process, base_addr, &offsets, current_state.skater, 0);
             } else {
-                career.update(process, base_addr, current_state.skater, prev_state.goal_count);
+                career.update(process, base_addr, &offsets, current_state.skater, prev_state.goal_count);
             }
         }
 
@@ -224,6 +333,8 @@ pub async fn run(process: &Process, process_name: &str) {
             asr::timer::resume_game_time();
             asr::print_message(format!("Done Loading").as_str());
         }
+
+        //asr::print_message(format!("LEVEL = {}", current_state.level_name).as_str());
 
         if (current_state.level_name == "Warehouse" || current_state.level_name == "Hangar") && prev_state.level_name == "FrontEnd" {
             starting_game = true;

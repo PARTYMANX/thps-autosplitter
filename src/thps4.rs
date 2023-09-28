@@ -6,9 +6,12 @@ struct State {
     is_loading: bool,
 }
 
+// TODO: add splits for other categories!!
+
 impl State {
     pub fn update(process: &Process, base_addr: Address) -> Self {
         State {
+            // TODO: change this to use level ID
             level_name: match process.read::<ArrayCString<16>>(base_addr + 0x6B6BF0 as u32) {
                 Ok(v) => {
                     match String::from_utf8(v.as_bytes().to_vec()) {

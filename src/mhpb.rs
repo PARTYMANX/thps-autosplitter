@@ -1,7 +1,5 @@
 use asr::{Address, Process, timer::TimerState, time::Duration};
 
-// Loading = 0x55e230
-
 struct State {
     is_timer_running: bool, // got it
     timer_vblanks: u32,
@@ -23,18 +21,41 @@ enum Module {
 
 impl State {
     pub fn check_for_reset(process: &Process, base_addr: Address) -> bool {
-        for i in 0..15 {
-            let goal_count = match process.read::<u8>(base_addr + 0x1656cc + (i * 0x104) as u32) {
-                Ok(v) => v,
-                Err(_) => 0,
-            };
+        let module = match process.read_pointer_path32::<u32>(base_addr, &vec!(0x139db4 as u32, 0x3c as u32)) {
+            Ok(v) => {
+                match process.read_pointer_path32::<u32>(base_addr, &vec!(0x139db4 as u32, v + 0x1c as u32)) {
+                    Ok(v) => {
+                        //asr::print_message(&format!("MODULE SIZE: {}", v));
+                        if v == 0x43000 {
+                            Module::Frontend
+                        } else if v== 0x9c000 {
+                            Module::Game
+                        } else {
+                            Module::Unknown
+                        }
+                    },
+                    Err(_) => Module::Unknown, 
+                }
+            },
+            Err(_) => Module::Unknown, 
+        };
 
-            if goal_count > 0 {
-                return false;
+        if matches!(module, Module::Frontend) {
+            for i in 0..9 {
+                let goal_count = match process.read_pointer_path32::<u8>(base_addr, &vec!(0x850d0 + (i * 0x38) as u32)) {
+                    Ok(v) => v,
+                    Err(_) => 0,
+                };
+    
+                if goal_count > 0 {
+                    return false;
+                }
             }
+    
+            return true;
         }
 
-        return true;
+        return false;
     }
 
     pub fn update(process: &Process, base_addr: Address) -> Self {
@@ -83,7 +104,7 @@ impl State {
                     Err(_) => 0xff,
                 };
 
-                if rider_id >= 0 && rider_id <= 9 {    // TODO: figure out secret skaters
+                if rider_id <= 9 {    // TODO: figure out secret skaters
                     let rider_profile = 0x850d0 + (rider_id as u32 * 0x38);
         
                     match process.read_pointer_path32::<u8>(base_addr, &vec!(0x139db4 as u32, rider_profile + 4 + 6)) {
@@ -123,7 +144,10 @@ impl State {
                     _gold_count: gold_count as u32,
                     medal_count,
                     goal_count,
-                    is_loading: false,
+                    is_loading: match process.read_pointer_path32::<u32>(base_addr, &vec!(0x139db4 as u32, 0x84824 as u32)) {
+                        Ok(v) => v == 0,
+                        Err(_) => false,
+                    },
                 }
             },
             Module::Game => {
@@ -132,7 +156,7 @@ impl State {
                     Err(_) => 0xff,
                 };
 
-                if rider_id >= 0 && rider_id <= 9 {    // TODO: figure out secret skaters
+                if rider_id <= 9 {
                     let rider_profile = 0x221290 + (rider_id as u32 * 0x38);
         
                     match process.read_pointer_path32::<u8>(base_addr, &vec!(0x139db4 as u32, rider_profile + 4 + 6)) {
@@ -210,6 +234,9 @@ impl State {
                     is_loading: match process.read_pointer_path32::<u8>(base_addr, &vec!(0x139db4 as u32, 0xbc6b0 as u32)) {
                         Ok(v) => v != 0,
                         Err(_) => false,
+                    } || match process.read_pointer_path32::<u8>(base_addr, &vec!(0x139db4 as u32, 0xbc598 as u32)) {
+                        Ok(v) => v == 0,
+                        Err(_) => false,
                     },
                 }
             }
@@ -229,62 +256,59 @@ pub async fn run(process: &Process, process_name: &str) {
 
     let mut igt_accumulator: i64 = 0;   // igt in seconds
     let mut prev_igt = Duration::seconds(-1);
+    let mut start_vblank = 0;
+
+    let mut prev_level = 0;
 
     loop {
         // update vars
-        let current_state = State::update(process, base_addr);
+        let mut current_state = State::update(process, base_addr);
 
-        if current_state.module != prev_state.module {
-            asr::print_message(&format!("Module changed to {:?}!", current_state.module));
-        }
-        if current_state.timer_vblanks != prev_state.timer_vblanks {
-            asr::print_message(&format!("Rider changed to {}!", current_state.timer_vblanks));
-        }
-        if current_state._gold_count != prev_state._gold_count {
-            asr::print_message(&format!("Gold count changed to {}!", current_state._gold_count));
-        }
-        if current_state.medal_count != prev_state.medal_count {
-            asr::print_message(&format!("Medal count changed to {}!", current_state.medal_count));
-        }
-        if current_state.goal_count != prev_state.goal_count {
-            asr::print_message(&format!("Goal count changed to {}!", current_state.goal_count));
-        }
-        if current_state.level_id != prev_state.level_id {
-            asr::print_message(&format!("Level changed to {}!", current_state.level_id));
-        }
-        if current_state.mode != prev_state.mode {
-            asr::print_message(&format!("Mode changed to {}!", current_state.mode));
-        }
-        if current_state.is_timer_running != prev_state.is_timer_running {
-            asr::print_message(&format!("Timer state changed to {}!", current_state.is_timer_running));
-        }
-        if current_state.is_loading != prev_state.is_loading {
-            asr::print_message(&format!("Loading changed to {}!", current_state.is_loading));
+        // pause game time when loading, resume when done
+        if current_state.is_loading && !prev_state.is_loading {
+            asr::timer::pause_game_time();
+            asr::print_message(format!("Starting Load...").as_str());
+        } else if !current_state.is_loading && prev_state.is_loading {
+            asr::timer::resume_game_time();
+            asr::print_message(format!("Done Loading").as_str());
         }
 
-        // NOTE: when module changes, it takes a sec for stuff to make it over.  for this reason, reset on menu only when goals *changes to zero in frontend*
-
-        /*match asr::timer::state() {
+        match asr::timer::state() {
             TimerState::NotRunning => {
                 if game_done {
                     game_done = false;
                 }
 
-                if current_state.mode == 1 && current_state.goal_count == 0 && current_state.level_id == 0 && current_state.is_timer_running {
+                if matches!(current_state.module, Module::Game) && current_state.mode == 0 && current_state.goal_count == 0 && current_state.level_id == 0 && current_state.is_timer_running {
                     asr::timer::start();
                     asr::print_message(format!("Starting timer...").as_str());
 
-                    asr::timer::pause_game_time();
+                    //asr::timer::pause_game_time();
                     igt_accumulator = 0;
+                    prev_level = 0;
                 }
             },
             TimerState::Paused | TimerState::Running => {
-                // split on level changes (except going to menu)
-                if current_state.level_id != prev_state.level_id {
-                    level_changed = true;
+                // level id will often change to 0 on menu, so preserve it from last gameplay
+                if matches!(current_state.module, Module::Frontend) {
+                    current_state.level_id = prev_level;
                 }
 
-                if current_state.screen == 6 && level_changed {
+                // keep level id stable if the module is still initializing
+                if current_state.is_loading {
+                    current_state.level_id = prev_state.level_id;
+                }
+
+                // make sure level is valid
+                if matches!(current_state.module, Module::Game) && !current_state.is_loading {
+                    // split on level changes (except going to menu)
+                    if matches!(current_state.module, Module::Game) && current_state.level_id != prev_level {
+                        level_changed = true;
+                    }
+                    prev_level = current_state.level_id;
+                }
+
+                if matches!(current_state.module, Module::Game) && level_changed {
                     level_changed = false;
                     asr::timer::split();
                     asr::print_message(format!("Changed levels; splitting timer...").as_str());
@@ -292,44 +316,50 @@ pub async fn run(process: &Process, process_name: &str) {
 
                 // split when all medals collected 
                 // TODO: add setting to only split when all goals and goals are collected
-                if !game_done && current_state.medal_count == 3 {
+                if matches!(current_state.module, Module::Game) && !game_done && current_state.medal_count == 2 {
                     game_done = true;
                     asr::timer::split();
                     asr::print_message(format!("Collected all medals; splitting timer...").as_str());
                 }
 
-                // reset when on a menu and no goals are complete on any skater
-                if current_state.screen != 6 && State::check_for_reset(process, base_addr) {
+                // reset when on a menu and no goals are complete on current rider
+                if (matches!(current_state.module, Module::Frontend) || matches!(current_state.module, Module::Unknown)) && !current_state.is_loading && current_state.goal_count == 0 {
                     asr::timer::reset();
                     asr::print_message(format!("Resetting timer...").as_str());
 
                     prev_igt = Duration::seconds(-1);
-                    asr::timer::resume_game_time();
+                    //asr::timer::resume_game_time();
                 }
 
                 // calculate igt
                 // commit run's time when either the timer has stopped (run ended) or current time is lower than previous while timer is running
-                // FIXME: RECORD, THEN SUBTRACT TIMER FROM WHEN TIMER TRANSITIONS TO STARTED
-                if (!current_state.is_timer_running && prev_state.is_timer_running) || (current_state.timer_vblanks < prev_state.timer_vblanks && prev_state.is_timer_running) {
-                    igt_accumulator += prev_state.timer_vblanks as i64 / 60;
-                }
+                /*if matches!(current_state.module, Module::Game) {
+                    if current_state.is_timer_running && !prev_state.is_timer_running {
+                        start_vblank = current_state.timer_vblanks;
+                    }
 
-                let igt_duration = if current_state.is_timer_running {
-                    Duration::seconds(igt_accumulator + (current_state.timer_vblanks as i64 / 60))
-                } else {
-                    Duration::seconds(igt_accumulator)
-                };
-
-                // prevent excess messaging and only send igt when relevant
-                if igt_duration != prev_igt {
-                    prev_igt = igt_duration;
-                    asr::timer::set_game_time(igt_duration);
-                }
+                    if (!current_state.is_timer_running && prev_state.is_timer_running) || (current_state.timer_vblanks < prev_state.timer_vblanks && prev_state.is_timer_running) {
+                        igt_accumulator += (prev_state.timer_vblanks - start_vblank) as i64 / 60;
+                        start_vblank = 0;
+                    }
+    
+                    let igt_duration = if current_state.is_timer_running {
+                        Duration::seconds(igt_accumulator + ((current_state.timer_vblanks - start_vblank) as i64 / 60))
+                    } else {
+                        Duration::seconds(igt_accumulator)
+                    };
+    
+                    // prevent excess messaging and only send igt when relevant
+                    if igt_duration != prev_igt {
+                        prev_igt = igt_duration;
+                        asr::timer::set_game_time(igt_duration);
+                    }
+                }*/
             },
             TimerState::Ended | TimerState::Unknown | _ => {
                 // do nothing. maybe we should still run reset when it's ended?
             },
-        }*/
+        }
 
         prev_state = current_state;
 

@@ -15,6 +15,7 @@ use asr::{Address, Process, timer::TimerState, time::Duration};
 // 0x568a6c + (skater id * 0x104) gets you career?
 
 // Loading = 0x55e230
+// GLevel = 0x5674f8 (prevents splits)
 
 struct State {
     is_timer_running: bool,
@@ -97,7 +98,7 @@ impl State {
                 Err(_) => false,
             },
 
-            level_id: match process.read::<u8>(base_addr + 0x15e8f0 as u32) {
+            level_id: match process.read::<u8>(base_addr + 0x1674f8 as u32) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
@@ -115,7 +116,8 @@ impl State {
             // used for igt only, so clamp it to max run time
             timer_vblanks: match process.read::<u32>(base_addr + 0x16af80 as u32) {
                 Ok(v) => {
-                    let level_id = match process.read::<u32>(base_addr + 0x15e8f0 as u32) {
+                    // possibly CBruce + 2cc0 is time left??
+                    let level_id = match process.read::<u32>(base_addr + 0x1674f8 as u32) {
                         Ok(v) => v.clamp(0, 13),
                         Err(_) => 0,
                     };

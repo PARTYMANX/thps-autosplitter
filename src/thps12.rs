@@ -3,15 +3,6 @@ use std::collections::HashMap;
 use asr::{Address, Process, timer::TimerState, signature::Signature};
 use once_cell::sync::Lazy;
 
-// PATTERNS
-// FNamePool = "74 09 48 8D 15 ?? ?? ?? ?? EB 16", 0x5
-// UWorld = "0F 2E ?? 74 ?? 48 8B 1D ?? ?? ?? ?? 48 85 DB 74", 0x8
-// LOADING = 4D 85 C0 75 4F 48 83 3D ?? ?? ?? ?? 00 75 3E, 0x8
-// CAREER = "48 8B 5C 24 20 48 8D 05 ?? ?? ?? ?? 48 83 C4 28 c3", 0x8
-// 
-// RUN_STATE = 4C 89 44 24 28 48 89 05 ?? ?? ?? ?? 48 8D 0D, 0x8
-// what are the chances any of these survive
-
 struct Offsets {
     fnamepool: u64,
     uworld: u64,
@@ -267,8 +258,7 @@ impl State {
 
             skater: skater_fname, 
 
-            // this is some message buffer or something.  we're just grabbing a convenient byte that happens to be 0 when a run is over.  
-            // for completeness' sake, this seems to change mainly for 3 messages: match_start (1), match_end (0), goal_completed (49?)
+            // check that the last log message was the start message to know if we're running TODO: in the future when verifying AG&G, we'll need to look for match_end
             is_running: msg == "dlog_event_client_match_start",
 
             is_loading: match process.read_pointer_path64::<bool>(base_addr, &vec!(offsets.loading as u64, 0xb0)) {

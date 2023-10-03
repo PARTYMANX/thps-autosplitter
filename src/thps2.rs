@@ -26,6 +26,7 @@ struct State {
     _gold_count: u32,
     medal_count: u32,
     goal_count: u8,
+    is_loading: bool,
 }
 
 impl State {
@@ -51,12 +52,12 @@ impl State {
         let mut goal_count = 0;
 
         // get skater
-        let skater_id = match process.read_pointer_path32::<i32>(base_addr, &vec!(0x1674b8 as u32, 0x2cc0 as u32)) {
-            Ok(v) => v,
+        let skater_id = match process.read_pointer_path32::<u32>(base_addr, &vec!(0x1674b8 as u32, 0x2cc0 as u32)) {
+            Ok(v) => v as i32,
             Err(_) => -1,
         };
 
-        if skater_id > 0 && skater_id < 15 {    // TODO: figure out secret skaters
+        if skater_id >= 0 && skater_id <= 15 {    // TODO: figure out secret skaters
             let skater_profile = 0x1656cc + (skater_id as u32 * 0x104);
             let medal_offset = skater_profile + 0xc;
 
@@ -141,6 +142,12 @@ impl State {
             _gold_count: gold_count,
             medal_count: medal_count,
             goal_count: goal_count,
+
+            
+            is_loading: match process.read::<u8>(base_addr + 0x15e230 as u32) {
+                Ok(v) => v != 0,
+                Err(_) => false,
+            },
         }
     }
 }
@@ -162,6 +169,15 @@ pub async fn run(process: &Process, process_name: &str) {
         // update vars
         let current_state = State::update(process, base_addr);
 
+        // pause game time when loading, resume when done
+        if current_state.is_loading && !prev_state.is_loading {
+            asr::timer::pause_game_time();
+            asr::print_message(format!("Starting Load...").as_str());
+        } else if !current_state.is_loading && prev_state.is_loading {
+            asr::timer::resume_game_time();
+            asr::print_message(format!("Done Loading").as_str());
+        }
+
         match asr::timer::state() {
             TimerState::NotRunning => {
                 if game_done {
@@ -172,7 +188,7 @@ pub async fn run(process: &Process, process_name: &str) {
                     asr::timer::start();
                     asr::print_message(format!("Starting timer...").as_str());
 
-                    asr::timer::pause_game_time();
+                    //asr::timer::pause_game_time();
                     igt_accumulator = 0;
                 }
             },
@@ -202,12 +218,12 @@ pub async fn run(process: &Process, process_name: &str) {
                     asr::print_message(format!("Resetting timer...").as_str());
 
                     prev_igt = Duration::seconds(-1);
-                    asr::timer::resume_game_time();
+                    //asr::timer::resume_game_time();
                 }
 
                 // calculate igt
                 // commit run's time when either the timer has stopped (run ended) or current time is lower than previous while timer is running
-                if (!current_state.is_timer_running && prev_state.is_timer_running) || (current_state.timer_vblanks < prev_state.timer_vblanks && prev_state.is_timer_running) {
+                /*if (!current_state.is_timer_running && prev_state.is_timer_running) || (current_state.timer_vblanks < prev_state.timer_vblanks && prev_state.is_timer_running) {
                     igt_accumulator += prev_state.timer_vblanks as i64 / 60;
                 }
 
@@ -221,7 +237,7 @@ pub async fn run(process: &Process, process_name: &str) {
                 if igt_duration != prev_igt {
                     prev_igt = igt_duration;
                     asr::timer::set_game_time(igt_duration);
-                }
+                }*/
             },
             TimerState::Ended | TimerState::Unknown | _ => {
                 // do nothing. maybe we should still run reset when it's ended?

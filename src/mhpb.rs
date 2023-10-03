@@ -2,7 +2,7 @@ use asr::{Address, Process, timer::TimerState, time::Duration};
 
 struct State {
     is_timer_running: bool, // got it
-    timer_vblanks: u32,
+    _timer_vblanks: u32,
     level_id: u8,   // got it
     mode: u8,   // got it
     module: Module, // got it
@@ -20,7 +20,7 @@ enum Module {
 }
 
 impl State {
-    pub fn check_for_reset(process: &Process, base_addr: Address) -> bool {
+    pub fn _check_for_reset(process: &Process, base_addr: Address) -> bool {
         let module = match process.read_pointer_path32::<u32>(base_addr, &vec!(0x139db4 as u32, 0x3c as u32)) {
             Ok(v) => {
                 match process.read_pointer_path32::<u32>(base_addr, &vec!(0x139db4 as u32, v + 0x1c as u32)) {
@@ -61,7 +61,6 @@ impl State {
     pub fn update(process: &Process, base_addr: Address) -> Self {
         let mut gold_count = 0;
         let mut medal_count = 0;
-        let mut comp_all_cash = 0;
         let mut goal_count = 0;
 
         // get currently loaded module
@@ -88,7 +87,7 @@ impl State {
             Module::Unknown => {
                 Self {
                     is_timer_running: false,
-                    timer_vblanks: 0,
+                    _timer_vblanks: 0,
                     level_id: 0,
                     mode: 0,
                     module,
@@ -137,7 +136,7 @@ impl State {
 
                 Self {
                     is_timer_running: false,
-                    timer_vblanks: 0,
+                    _timer_vblanks: 0,
                     level_id: 0,
                     mode: 0,
                     module,
@@ -206,7 +205,7 @@ impl State {
                     module,
         
                     // used for igt only, so clamp it to max run time
-                    timer_vblanks: match process.read_pointer_path32::<u32>(base_addr, &vec!(0x139db4 as u32, 0xc61dc as u32)) {
+                    _timer_vblanks: match process.read_pointer_path32::<u32>(base_addr, &vec!(0x139db4 as u32, 0xc61dc as u32)) {
                         Ok(v) => {
                             // possibly CBruce + 2cc0 is time left??
                             let level_id = match process.read::<u32>(base_addr + 0x15e8f0 as u32) {
@@ -254,9 +253,9 @@ pub async fn run(process: &Process, process_name: &str) {
     let mut game_done = false;
     let mut level_changed = false;
 
-    let mut igt_accumulator: i64 = 0;   // igt in seconds
-    let mut prev_igt = Duration::seconds(-1);
-    let mut start_vblank = 0;
+    let mut _igt_accumulator: i64 = 0;   // igt in seconds
+    let mut _prev_igt = Duration::seconds(-1);
+    let mut _start_vblank = 0;
 
     let mut prev_level = 0;
 
@@ -284,7 +283,7 @@ pub async fn run(process: &Process, process_name: &str) {
                     asr::print_message(format!("Starting timer...").as_str());
 
                     //asr::timer::pause_game_time();
-                    igt_accumulator = 0;
+                    _igt_accumulator = 0;
                     prev_level = 0;
                 }
             },
@@ -327,7 +326,7 @@ pub async fn run(process: &Process, process_name: &str) {
                     asr::timer::reset();
                     asr::print_message(format!("Resetting timer...").as_str());
 
-                    prev_igt = Duration::seconds(-1);
+                    _prev_igt = Duration::seconds(-1);
                     //asr::timer::resume_game_time();
                 }
 

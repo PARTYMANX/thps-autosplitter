@@ -323,7 +323,7 @@ pub async fn run(process: &Process, process_name: &str) {
                 }
 
                 // reset when on a menu and no goals are complete on current rider
-                if (matches!(current_state.module, Module::Frontend) || matches!(current_state.module, Module::Unknown)) && !current_state.is_loading && current_state.goal_count == 0 {
+                if matches!(current_state.module, Module::Frontend) && !current_state.is_loading && current_state.goal_count == 0 {
                     asr::timer::reset();
                     asr::print_message(format!("Resetting timer...").as_str());
 

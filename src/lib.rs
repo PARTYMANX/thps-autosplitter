@@ -46,6 +46,11 @@ async fn main() {
         }).await;
     
         asr::print_message("Game Closed");
+
+        if matches!(asr::timer::state(), asr::timer::TimerState::Running) || matches!(asr::timer::state(), asr::timer::TimerState::Paused) {
+            asr::timer::reset();
+        }
+
         asr::future::next_tick().await;
     }
 }

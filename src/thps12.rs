@@ -6,7 +6,6 @@ use once_cell::sync::Lazy;
 struct Offsets {
     fnamepool: u64,
     uworld: u64,
-    loading: u64,
     career: u64,
     run_state: u64,
 }
@@ -24,13 +23,6 @@ impl Offsets {
             Some(v) => v + 8,
             None => {
                 asr::print_message("Failed to get UWorld address!!");
-                Address::from(0 as u64)
-            }
-        };
-        let loading_ptr: Address = match Signature::<15>::new("4D 85 C0 75 4F 48 83 3D ?? ?? ?? ?? 00 75 3E").scan_process_range(process, (base_addr, module_size)) {
-            Some(v) => v + 8,
-            None => {
-                asr::print_message("Failed to get loading address!!");
                 Address::from(0 as u64)
             }
         };
@@ -58,10 +50,6 @@ impl Offsets {
                 Ok(v) => (uworld_ptr.value() + 0x4 + v as u64) - base_addr.value(),
                 Err(_) => 0,
             },
-            loading: match process.read::<i32>(loading_ptr) {
-                Ok(v) => (loading_ptr.value() + 0x5 + v as u64) - base_addr.value(),
-                Err(_) => 0,
-            },
             career: match process.read::<i32>(career_ptr) {
                 Ok(v) => ((career_ptr.value() + 0x8 + v as u64) - base_addr.value()) + 0xA0,
                 Err(_) => 0,
@@ -70,6 +58,25 @@ impl Offsets {
                 Ok(v) => (run_state_ptr.value() + 0x4 + v as u64) - base_addr.value(),
                 Err(_) => 0,
             },
+        }
+    }
+
+    fn is_valid(&self) -> bool {
+        self.fnamepool != 0 && self.uworld != 0 && self.career != 0 && self.run_state != 0
+    }
+
+    fn print_offsets(&self) {
+        if self.fnamepool != 0 {
+            asr::print_message(&format!("FNAMEPOOL ADDR: {:#018x}", self.fnamepool));
+        }
+        if self.uworld != 0 {
+            asr::print_message(&format!("UWORLD ADDR: {:#018x}", self.uworld));
+        }
+        if self.career != 0 {
+            asr::print_message(&format!("CAREER ADDR: {:#018x}", self.career));
+        }
+        if self.run_state != 0 {
+            asr::print_message(&format!("RUN STATE ADDR: {:#018x}", self.run_state));
         }
     }
 }
@@ -261,8 +268,8 @@ impl State {
             // check that the last log message was the start message to know if we're running TODO: in the future when verifying AG&G, we'll need to look for match_end
             is_running: msg == "dlog_event_client_match_start",
 
-            is_loading: match process.read_pointer_path64::<bool>(base_addr, &vec!(offsets.loading as u64, 0xb0)) {
-                Ok(v) => !v,
+            is_loading: match process.read_pointer_path64::<u8>(base_addr, &vec!(offsets.uworld as u64, 0x11F as u64)) {
+                Ok(v) => v & 0x01 != 0,
                 Err(_) => false,
             },
         }
@@ -276,14 +283,21 @@ pub async fn run(process: &Process, process_name: &str) {
     let base_addr = process.get_module_address(process_name).unwrap();
     let module_size = process.get_module_size(process_name).unwrap();
 
-    asr::print_message("Finding offsets...");
-    let offsets = Offsets::get(process, base_addr, module_size);
-    asr::print_message(&format!("FNAMEPOOL ADDR: {:#018x}", offsets.fnamepool));
-    asr::print_message(&format!("UWORLD ADDR: {:#018x}", offsets.uworld));
-    asr::print_message(&format!("LOADING ADDR: {:#018x}", offsets.loading));
-    asr::print_message(&format!("CAREER ADDR: {:#018x}", offsets.career));
-    asr::print_message(&format!("RUN STATE ADDR: {:#018x}", offsets.run_state));
-    asr::print_message("Offsets found!");
+    // TODO: loop this until all addresses are found
+    let mut offsets;
+
+    loop {
+        asr::print_message("Finding offsets...");
+        offsets = Offsets::get(process, base_addr, module_size);
+        offsets.print_offsets();
+        if offsets.is_valid() {
+            asr::print_message("Offsets found!");
+            break;
+        } 
+        
+        asr::print_message("Failed to find offsets! Trying again...");
+        asr::future::next_tick().await;
+    }
 
     let mut prev_state = State::update(process, base_addr, &offsets);
     let mut career = Career::new(process, base_addr, &offsets, prev_state.skater);

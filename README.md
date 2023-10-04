@@ -13,4 +13,5 @@ Currently, the autosplitter supports the following games:
 * Tony Hawk's Underground (Original Release and ClownJob'd)
 * Tony Hawk's Underground 2 (Original Release and ClownJob'd)
 * Tony Hawk's American Wasteland (Original Release and PARTYMOD)
-* Tony Hawk's Pro Skater 1 + 2 (Final Release)
+* Tony Hawk's Pro Skater 1 + 2 (Tested on Epic Games Store 1.1.3416770, Steam initial release)
+* Mat Hoffman's Pro BMX (Original Release)

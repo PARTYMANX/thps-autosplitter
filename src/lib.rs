@@ -16,17 +16,8 @@ async fn main() {
         asr::print_message("Looking for process...");
 
         let (&name, &game, process) = asr::future::retry(|| {
-            PROCESS_NAMES.iter().find_map(|(name, game)| Some((name, game, Process::attach(name)?)))
+            PROCESS_NAMES.iter().find_map(|(name, game)| Some((name, game, find_process(name, game)?)))
         }).await;
-
-        if matches!(game, Game::THPS12) {
-            // i hate to put this here, but we have to to make sure this is before process.until_closes()...
-            if thps12::detect_bootstrap(&process, name) {
-                asr::print_message("Attached to THPS1+2 bootstrapper.  Trying again...");
-                asr::future::next_tick().await;
-                continue;
-            }
-        }
 
         process.until_closes(async {
             asr::print_message(format!("Detected {}", name).as_str());
@@ -52,6 +43,31 @@ async fn main() {
         }
 
         asr::future::next_tick().await;
+    }
+}
+
+fn find_process(name: &str, game: &Game) -> Option<Process> {
+    if matches!(game, Game::THPS12) {
+        let processes = Process::list_by_name(name)?;
+
+        for pid in processes {
+            let process = Process::attach_by_pid(pid);
+
+            match &process {
+                Some(p) => {
+                    if !thps12::detect_bootstrap(&p, name) {
+                        return process;
+                    }
+                },
+                None => {
+                    // do nothing
+                }
+            }
+        }
+        
+        None
+    } else {
+        Process::attach(name)
     }
 }
 

@@ -6,6 +6,7 @@ use asr::{Address, Process, timer::TimerState};
 
 struct State {
     goal_count: u32,
+    medal_count: u32,
     gold_count: u32,
     level_id: u32,
     is_loading: bool,
@@ -45,14 +46,19 @@ impl State {
         return result;
     }
 
-    fn get_gold_count(process: &Process, base_addr: Address) -> u32 {
-        let mut result = 0;
+    fn get_medal_count(process: &Process, base_addr: Address) -> (u32, u32) {
+        let mut num_medals = 0;
+        let mut num_gold = 0;
 
         for i in 0..LEVEL_COUNT {
             if LEVEL_IS_COMP[i as usize] {
                 match process.read_pointer_path32::<u32>(base_addr, &vec!(0x4e1e90 as u32, 0x134 as u32, 0x14 as u32, 0x564 as u32 + (i * 8))) {
                     Ok(v) => {
-                        result += match v {
+                        if v != 0 {
+                            num_medals += 1;
+                        }
+
+                        num_gold += match v {
                             0x04 => 1,
                             _ => 0,
                         };
@@ -62,13 +68,16 @@ impl State {
             }
         }
 
-        return result;
+        return (num_medals, num_gold);
     }
 
     pub fn update(process: &Process, base_addr: Address) -> Self {
+        let (medal_count, gold_count) = Self::get_medal_count(process, base_addr);
+
         State {
             goal_count: Self::get_goal_count(process, base_addr),
-            gold_count: Self::get_gold_count(process, base_addr),
+            medal_count, 
+            gold_count,
 
             level_id: match process.read_pointer_path32::<u32>(base_addr, &vec!(0x4e1e90 as u32, 0x134 as u32, 0x14 as u32, 0x690 as u32)) {
                 Ok(v) => v,
@@ -111,6 +120,7 @@ pub async fn run(process: &Process, process_name: &str) {
 
     let mut foundry_started = false;
     let mut tokyo_started = false;
+    let mut tokyo_complete = false;
     let mut all_goals_and_golds_complete = false;
     let mut prev_state = State::update(process, base_addr);
 
@@ -132,12 +142,17 @@ pub async fn run(process: &Process, process_name: &str) {
         }
 
         // comp round and placing may be incorrect when starting tokyo, so store when we see the comp start
-        if !tokyo_started && current_state.level_id == 8 && !current_state.comp_is_over {
+        if !tokyo_started && current_state.level_id == 8 && !current_state.comp_is_over && current_state.medal_count < 3 {
+            asr::print_message(format!("Tokyo started!").as_str());
             tokyo_started = true;
         }
 
         if tokyo_started && current_state.level_id != 8 {
             tokyo_started = false;
+        }
+
+        if tokyo_complete && current_state.level_id != 8 && current_state.medal_count < 3 {
+            tokyo_complete = false;
         }
 
         if (current_state.goal_count != prev_state.goal_count || current_state.gold_count != prev_state.gold_count) && current_state.goal_count == 54 && current_state.gold_count == 3 {
@@ -169,7 +184,8 @@ pub async fn run(process: &Process, process_name: &str) {
                 }
 
                 // any% end (end of medal run on tokyo)
-                if current_state.level_id == 8 && tokyo_started && current_state.comp_is_over && !prev_state.comp_is_over && current_state.comp_ranking <= 3 {
+                if !tokyo_complete && (current_state.level_id == 8 && tokyo_started && current_state.comp_is_over && current_state.comp_ranking <= 3) || current_state.medal_count == 3 {
+                    tokyo_complete = true;
                     asr::timer::split();
                     asr::print_message(format!("Finished Tokyo; splitting timer...").as_str());
                 }

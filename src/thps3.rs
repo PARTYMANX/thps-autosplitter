@@ -141,13 +141,14 @@ pub async fn run(process: &Process, process_name: &str) {
             foundry_started = false;
         }
 
-        // comp round and placing may be incorrect when starting tokyo, so store when we see the comp start
+        // comp round and placing may be incorrect when starting tokyo, so store when we see the comp start. essentially this tracks initialization
         if !tokyo_started && current_state.level_id == 8 && !current_state.comp_is_over && current_state.medal_count < 3 {
             asr::print_message(format!("Tokyo started!").as_str());
             tokyo_started = true;
         }
 
         if tokyo_started && current_state.level_id != 8 {
+            asr::print_message(format!("Tokyo un-started!").as_str());
             tokyo_started = false;
         }
 
@@ -184,6 +185,8 @@ pub async fn run(process: &Process, process_name: &str) {
                 }
 
                 // any% end (end of medal run on tokyo)
+                // NOTE: the check is if we're on tokyo, the competition class is initialized, the competition is over, we're in at least 3rd place. 
+                // because this has been inconsistent in the past, the medal check is a backup if that fails.  the medal count is only updated after the ceremony, so it's going to be late for splitting
                 if !tokyo_complete && (current_state.level_id == 8 && tokyo_started && current_state.comp_is_over && current_state.comp_ranking <= 3) || current_state.medal_count == 3 {
                     tokyo_complete = true;
                     asr::timer::split();

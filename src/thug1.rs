@@ -67,14 +67,6 @@ pub async fn run(process: &Process, process_name: &str) {
         // update vars
         let current_state = State::update(process, base_addr);
 
-        if current_state.chapter != prev_state.chapter {
-            asr::print_message(&format!("Chapter changed to {}!", current_state.chapter));
-        }
-
-        if current_state.level_id != prev_state.level_id {
-            asr::print_message(&format!("level changed to {}!", current_state.level_id));
-        }
-
         // pause game time when loading, resume when done
         if current_state.is_loading && !prev_state.is_loading {
             asr::timer::pause_game_time();
@@ -92,25 +84,6 @@ pub async fn run(process: &Process, process_name: &str) {
                 }
             },
             TimerState::Paused | TimerState::Running => {
-                if current_state.chapter != prev_state.chapter {
-                    match current_state.chapter {
-                        3 /* Manhattan */ |
-                        6 /* Tampa */ | 
-                        10 /* San Diego */ |
-                        13 /* Hawaii */ |
-                        16 /* Vancouver */ | 
-                        17 /* Slam City Jam */ |
-                        18 /* Vancouver 2 */ |
-                        19 /* Moscow */ |
-                        22 /* New Jersey 2 */ |
-                        25 /* Pro Goals */ |
-                        26 /* Eric's Line */ |
-                        27 /* End */ => {
-                        }
-                        _ => {} // do nothing
-                    }
-                }
-
                 if !story_flags[0] && current_state.chapter == 3 && current_state.level_id == 2 {
                     asr::timer::split();
                     asr::print_message(format!("Started Manhattan; splitting timer...").as_str());

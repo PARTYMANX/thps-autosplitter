@@ -182,7 +182,7 @@ fn read_goal(process: &Process, addr: u32) -> Option<Goal> {
     }
 }
 
- #[derive(Debug, PartialEq, Eq)] 
+#[derive(Debug, PartialEq, Eq)] 
 enum Difficulty {
     UNKNOWN,
     EASY,

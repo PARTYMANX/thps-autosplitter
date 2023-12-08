@@ -8,6 +8,7 @@ struct State {
     is_game_finished: bool,
     is_loading: bool,
     is_story_started: bool,
+    story_points: u16,
     _story_difficulty: Difficulty,
     classic_difficulty: Difficulty,
 }
@@ -197,9 +198,14 @@ impl State {
                 Err(_) => false,
             },
 
-            is_story_started: match process.read_pointer_path32::<u8>(base_addr, &vec!(0x3ce478 as u32, 0x20 as u32, 0x634 as u32)) {   // 0x638 works as well
+            is_story_started: match process.read_pointer_path32::<u8>(base_addr, &vec!(0x3ce478 as u32, 0x20 as u32, 0x634 as u32)) {
                 Ok(v) => v & 0x1 != 0,
                 Err(_) => false,
+            },
+
+            story_points: match process.read_pointer_path32::<u16>(base_addr, &vec!(0x3ce478 as u32, 0x20 as u32, 0x5d8 as u32)) {
+                Ok(v) => v,
+                Err(_) => 0,
             },
 
             _story_difficulty,
@@ -227,6 +233,10 @@ pub async fn run(process: &Process, process_name: &str) {
     loop {
         // update vars
         let current_state = State::update(process, base_addr);
+
+        if current_state.story_points != prev_state.story_points {
+            asr::print_message(format!("Story points changed to {}", current_state.story_points).as_str());
+        }
 
         // pause game time when loading, resume when done
         if current_state.is_loading && !prev_state.is_loading {
@@ -267,7 +277,7 @@ pub async fn run(process: &Process, process_name: &str) {
                         }
         
                         // reset when story start flag is unset
-                        if !current_state.is_story_started && prev_state.is_story_started {
+                        if current_state.level_id == 0 && !current_state.is_story_started && current_state.story_points == 0 {
                             asr::timer::reset();
                             asr::print_message(format!("Resetting timer...").as_str());
                             mode = Gamemode::NONE;
@@ -288,7 +298,7 @@ pub async fn run(process: &Process, process_name: &str) {
                         }
 
                         // reset when on 0 goals are completed
-                        if !current_state.level_id == 0 && prev_state.total_classic_goals == 0 {
+                        if current_state.level_id == 0 && prev_state.total_classic_goals == 0 {
                             asr::timer::reset();
                             asr::print_message(format!("Resetting timer...").as_str());
                             mode = Gamemode::NONE;

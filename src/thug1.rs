@@ -1,6 +1,7 @@
-use asr::{Address, Process, timer::TimerState};
+use asr::{Address, Process, timer::TimerState, string::ArrayCString};
 
 struct State {
+    has_played_intro: bool,
     level_id: u8,
     _goal_count: u8,
     chapter: u8,
@@ -11,6 +12,19 @@ struct State {
 impl State {
     pub fn update(process: &Process, base_addr: Address) -> Self {
         State {
+            has_played_intro: match process.read::<ArrayCString<16>>(base_addr + 0x36A7C8 as u32) {
+                Ok(v) => {
+                    match String::from_utf8(v.as_bytes().to_vec()) {
+                        Ok(v) => v == "Intro_02",
+                        Err(err) => {
+                            asr::print_message(format!("Error reading last cutscene name: {:?}", err).as_str());
+                            false
+                        },
+                    }
+                },
+                Err(_) => false,
+            },
+
             level_id: match process.read_pointer_path32::<u8>(base_addr, &vec!(0x36A788 as u32, 0x20 as u32, 0x5c4 as u32)) {
                 Ok(v) => v,
                 Err(_) => 0,
@@ -78,7 +92,7 @@ pub async fn run(process: &Process, process_name: &str) {
 
         match asr::timer::state() {
             TimerState::NotRunning => {
-                if current_state.is_career_started && !prev_state.is_career_started && current_state.level_id == 19 {
+                if current_state.has_played_intro && !prev_state.has_played_intro {
                     asr::timer::start();
                     asr::print_message(format!("Starting timer...").as_str());
                 }

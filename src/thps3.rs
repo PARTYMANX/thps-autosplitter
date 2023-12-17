@@ -187,7 +187,7 @@ pub async fn run(process: &Process, process_name: &str) {
                 // any% end (end of medal run on tokyo)
                 // NOTE: the check is if we're on tokyo, the competition class is initialized, the competition is over, we're in at least 3rd place. 
                 // because this has been inconsistent in the past, the medal check is a backup if that fails.  the medal count is only updated after the ceremony, so it's going to be late for splitting
-                if !tokyo_complete && (current_state.level_id == 8 && tokyo_started && current_state.comp_is_over && current_state.comp_ranking <= 3) || current_state.medal_count == 3 {
+                if !tokyo_complete && ((current_state.level_id == 8 && tokyo_started && current_state.comp_is_over && current_state.comp_ranking <= 3) || current_state.medal_count == 3) {
                     tokyo_complete = true;
                     asr::timer::split();
                     asr::print_message(format!("Finished Tokyo; splitting timer...").as_str());

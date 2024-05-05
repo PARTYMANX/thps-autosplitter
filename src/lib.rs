@@ -85,8 +85,9 @@ enum Game {
     MHPB,
 }
 
-const PROCESS_NAMES: [(&str, Game); 13] = [
+const PROCESS_NAMES: [(&str, Game); 14] = [
     ("THawk2.exe", Game::THPS2),
+    ("THPS2.exe", Game::THPS2),
     ("Skate3.exe", Game::THPS3),
     ("THPS3.exe", Game::THPS3),
     ("Skate4.exe", Game::THPS4),

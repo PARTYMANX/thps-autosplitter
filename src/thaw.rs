@@ -509,6 +509,8 @@ pub async fn run(process: &Process, process_name: &str) {
 
         match asr::timer::state() {
             TimerState::NotRunning => {
+                story_flags.fill(false);
+
                 if is_paused {
                     is_paused = false;
                     asr::timer::resume_game_time();

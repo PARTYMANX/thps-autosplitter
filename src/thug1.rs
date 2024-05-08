@@ -92,6 +92,7 @@ pub async fn run(process: &Process, process_name: &str) {
 
         match asr::timer::state() {
             TimerState::NotRunning => {
+                story_flags.fill(false);
                 if current_state.has_played_intro && !prev_state.has_played_intro {
                     asr::timer::start();
                     asr::print_message(format!("Starting timer...").as_str());

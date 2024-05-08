@@ -292,7 +292,7 @@ pub async fn run(process: &Process, process_name: &str) {
                         if current_state.is_run_ended && !prev_state.is_run_ended && 
                             ((current_state.total_classic_goals < 120 && current_state.classic_difficulty == Difficulty::NORMAL && current_state.classic_triangle_goals >= 6) || 
                             (current_state.total_classic_goals < 120 && current_state.classic_difficulty == Difficulty::SICK && current_state.classic_triangle_goals >= 8) || 
-                            (current_state.total_classic_goals == 130)) {
+                            (current_state.total_classic_goals == 140)) {
                             asr::timer::split();
                             asr::print_message(format!("End of classic mode; splitting timer...").as_str());
                         }

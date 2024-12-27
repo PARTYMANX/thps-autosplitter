@@ -33,11 +33,11 @@ struct ScriptStruct {
 impl ScriptStruct {
     pub fn read(process: &Process, addr: u32) -> Self {
         Self {
-            _unk: match process.read_pointer_path32::<u32>(addr, &vec!(0x0 as u32)) {
+            _unk: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x0 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            phead: match process.read_pointer_path32::<u32>(addr, &vec!(0x4 as u32)) {
+            phead: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x4 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
@@ -85,27 +85,27 @@ struct ScriptComponent {
 impl ScriptComponent {
     pub fn read(process: &Process, addr: u32) -> Self {
         Self {
-            _unk: match process.read_pointer_path32::<u8>(addr, &vec!(0x0 as u32)) {
+            _unk: match process.read_pointer_path::<u8>(addr, asr::PointerSize::Bit32, &vec!(0x0 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            ttype: match process.read_pointer_path32::<u8>(addr, &vec!(0x1 as u32)) {
+            ttype: match process.read_pointer_path::<u8>(addr, asr::PointerSize::Bit32, &vec!(0x1 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            _size: match process.read_pointer_path32::<u16>(addr, &vec!(0x2 as u32)) {
+            _size: match process.read_pointer_path::<u16>(addr, asr::PointerSize::Bit32, &vec!(0x2 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            name: match process.read_pointer_path32::<u32>(addr, &vec!(0x4 as u32)) {
+            name: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x4 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            data: match process.read_pointer_path32::<u32>(addr, &vec!(0x8 as u32)) {
+            data: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x8 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            pnext: match process.read_pointer_path32::<u32>(addr, &vec!(0xc as u32)) {
+            pnext: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0xc as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
@@ -267,15 +267,15 @@ struct GoalListNode {
 impl GoalListNode {
     pub fn read(process: &Process, addr: u32) -> Self {
         Self {
-            name: match process.read_pointer_path32::<u32>(addr, &vec!(0x0 as u32)) {
+            name: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x0 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            pgoal: match process.read_pointer_path32::<u32>(addr, &vec!(0x4 as u32)) {
+            pgoal: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x4 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            pnext: match process.read_pointer_path32::<u32>(addr, &vec!(0x8 as u32)) {
+            pnext: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x8 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
@@ -294,23 +294,23 @@ struct GoalList {
 impl GoalList {
     pub fn read(process: &Process, addr: u32) -> Self {
         Self {
-            num: match process.read_pointer_path32::<u32>(addr, &vec!(0x0 as u32)) {
+            num: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x0 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            phead: match process.read_pointer_path32::<u32>(addr, &vec!(0x4 as u32)) {
+            phead: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x4 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            _ptail: match process.read_pointer_path32::<u32>(addr, &vec!(0x8 as u32)) {
+            _ptail: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x8 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            _pcurrent: match process.read_pointer_path32::<u32>(addr, &vec!(0xc as u32)) {
+            _pcurrent: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0xc as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            _idx: match process.read_pointer_path32::<u32>(addr, &vec!(0x10 as u32)) {
+            _idx: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x10 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
@@ -337,12 +337,12 @@ fn update_goals(process: &Process, addr: u32, state: &mut State) {
     let mut pnode = goal_list.phead;
     for _ in 0..goal_list.num {
         let node = GoalListNode::read(process, pnode);
-        if let Ok(flags) = process.read_pointer_path32::<u32>(node.pgoal, &vec!(0x68 as u32)) {
+        if let Ok(flags) = process.read_pointer_path::<u32>(node.pgoal, asr::PointerSize::Bit32, &vec!(0x68 as u64)) {
             if flags & 0x4 != 0 {
                 if !state.completed_goals.borrow().contains(&node.name) {
                     let mut is_leaf = false;
 
-                    if let Ok(parent) = process.read_pointer_path32::<u32>(node.pgoal, &vec!(0x28 as u32, 0x0 as u32))  {
+                    if let Ok(parent) = process.read_pointer_path::<u32>(node.pgoal, asr::PointerSize::Bit32, &vec!(0x28 as u64, 0x0 as u64))  {
                         if parent == 0 {
                             state.completed_goals.borrow_mut().insert(node.name);
                             is_leaf = true;
@@ -389,12 +389,12 @@ struct State {
 impl State {
     pub fn update(process: &Process, base_addr: Address, offsets: &Offsets) -> Self {
         let mut result = Self {
-            level_id: match process.read_pointer_path32::<u32>(base_addr, &vec!(offsets.skmodule as u32, 0x20 as u32, 0xb0 as u32)) {
+            level_id: match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(offsets.skmodule as u64, 0x20 as u64, 0xb0 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
 
-            load_counter: match process.read_pointer_path32::<u32>(base_addr, &vec!(offsets.load_counter as u32)) {
+            load_counter: match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(offsets.load_counter as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
@@ -407,17 +407,17 @@ impl State {
             classic_difficulty: Difficulty::UNKNOWN,
             story_difficulty: Difficulty::UNKNOWN,
 
-            session_goals: match process.read_pointer_path32::<u32>(base_addr, &vec!(offsets.skmodule as u32, 0x78 as u32, 0x38 as u32)) {
+            session_goals: match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(offsets.skmodule as u64, 0x78 as u64, 0x38 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
         };
 
-        if let Ok(addr) = process.read_pointer_path32::<u32>(base_addr, &vec!(offsets.skmodule as u32, 0x78 as u32)) {
+        if let Ok(addr) = process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(offsets.skmodule as u64, 0x78 as u64)) {
             update_goals(process, addr, &mut result);
         }
 
-        if let Ok(addr) = process.read_pointer_path32::<u32>(base_addr, &vec!(offsets.skmodule as u32, 0x78 as u32, 0x14 as u32)) {
+        if let Ok(addr) = process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(offsets.skmodule as u64, 0x78 as u64, 0x14 as u64)) {
             update_goal_flags(process, addr, &mut result);
         }
 

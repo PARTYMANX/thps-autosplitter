@@ -36,7 +36,7 @@ impl State {
 
         for i in 0..LEVEL_COUNT {
             if !LEVEL_IS_COMP[i as usize] {
-                match process.read_pointer_path32::<u32>(base_addr, &vec!(0x4e1e90 as u32, 0x134 as u32, 0x14 as u32, 0x564 as u32 + (i * 8))) {
+                match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(0x4e1e90 as u64, 0x134 as u64, 0x14 as u64, (0x564 + (i * 8)) as u64)) {
                     Ok(v) => result += v.count_ones(),
                     Err(_) => {}    // do nothing, we either lost the process or don't have a career initialized
                 }
@@ -52,7 +52,7 @@ impl State {
 
         for i in 0..LEVEL_COUNT {
             if LEVEL_IS_COMP[i as usize] {
-                match process.read_pointer_path32::<u32>(base_addr, &vec!(0x4e1e90 as u32, 0x134 as u32, 0x14 as u32, 0x564 as u32 + (i * 8))) {
+                match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(0x4e1e90 as u64, 0x134 as u64, 0x14 as u64, (0x564 + (i * 8)) as u64)) {
                     Ok(v) => {
                         if v != 0 {
                             num_medals += 1;
@@ -79,7 +79,7 @@ impl State {
             medal_count, 
             gold_count,
 
-            level_id: match process.read_pointer_path32::<u32>(base_addr, &vec!(0x4e1e90 as u32, 0x134 as u32, 0x14 as u32, 0x690 as u32)) {
+            level_id: match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(0x4e1e90 as u64, 0x134 as u64, 0x14 as u64, 0x690 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
@@ -99,12 +99,12 @@ impl State {
                 Err(_) => false,
             },
 
-            comp_ranking: match process.read_pointer_path32::<u32>(base_addr, &vec!(0x4e1e90 as u32, 0x45c as u32, 0x160 as u32)) {
+            comp_ranking: match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(0x4e1e90 as u64, 0x45c as u64, 0x160 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
 
-            comp_is_over: match process.read_pointer_path32::<bool>(base_addr, &vec!(0x4e1e90 as u32, 0x45c as u32, 0x15c as u32)) {
+            comp_is_over: match process.read_pointer_path::<bool>(base_addr, asr::PointerSize::Bit32, &vec!(0x4e1e90 as u64, 0x45c as u64, 0x15c as u64)) {
                 Ok(v) => v,
                 Err(_) => false,
             },

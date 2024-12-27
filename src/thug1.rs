@@ -1,3 +1,5 @@
+use std::u64;
+
 use asr::{Address, Process, timer::TimerState, string::ArrayCString};
 
 struct State {
@@ -25,27 +27,27 @@ impl State {
                 Err(_) => false,
             },
 
-            level_id: match process.read_pointer_path32::<u8>(base_addr, &vec!(0x36A788 as u32, 0x20 as u32, 0x5c4 as u32)) {
+            level_id: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x36A788 as u64, 0x20 as u64, 0x5c4 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
 
-            is_career_started: match process.read_pointer_path32::<u8>(base_addr, &vec!(0x36A788 as u32, 0x20 as u32, 0x592 as u32)) {
+            is_career_started: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x36A788 as u64, 0x20 as u64, 0x592 as u64)) {
                 Ok(v) => (v & 0x8) != 0,
                 Err(_) => false,
             },
 
-            _goal_count: match process.read_pointer_path32::<u8>(base_addr, &vec!(0x36A788 as u32, 0x3a8 as u32, 0x24 as u32)) {
+            _goal_count: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x36A788 as u64, 0x3a8 as u64, 0x24 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
 
-            chapter: match process.read_pointer_path32::<u8>(base_addr, &vec!(0x36A788 as u32, 0x3a8 as u32, 0x3c as u32)) {
+            chapter: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x36A788 as u64, 0x3a8 as u64, 0x3c as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
 
-            is_loading: match process.read_pointer_path32::<bool>(base_addr, &vec!(0x29851C as u32, 0x24 as u32, 0x174 as u32)) {
+            is_loading: match process.read_pointer_path::<bool>(base_addr, asr::PointerSize::Bit32, &vec!(0x29851C as u64, 0x24 as u64, 0x174 as u64)) {
                 Ok(v) => v,
                 Err(_) => false,
             }

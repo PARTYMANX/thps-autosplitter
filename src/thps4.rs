@@ -14,22 +14,22 @@ impl State {
     pub fn update(process: &Process, base_addr: Address) -> Self {
         State {
             // TODO: change this to use level ID
-            level_id: match process.read_pointer_path32::<u8>(base_addr, &vec!(0x6B5B48 as u32, 0x20 as u32, 0x484 as u32)) {
+            level_id: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x6B5B48 as u64, 0x20 as u64, 0x484 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
 
-            total_cash: match process.read_pointer_path32::<u32>(base_addr, &vec!(0x6B5B48 as u32, 0x86c as u32, 0x28 as u32)) {
+            total_cash: match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(0x6B5B48 as u64, 0x86c as u64, 0x28 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
 
-            pro_points: match process.read_pointer_path32::<u8>(base_addr, &vec!(0x6B5B48 as u32, 0x86c as u32, 0x20 as u32)) {
+            pro_points: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x6B5B48 as u64, 0x86c as u64, 0x20 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
 
-            pro_goals_completed: match process.read_pointer_path32::<u32>(base_addr, &vec!(0x6B5B48 as u32, 0x20 as u32, 0x454 as u32)) {
+            pro_goals_completed: match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(0x6B5B48 as u64, 0x20 as u64, 0x454 as u64)) {
                 Ok(v) => v.count_ones() as u8,
                 Err(_) => 0,
             },
@@ -77,7 +77,7 @@ pub async fn run(process: &Process, process_name: &str) {
                     asr::print_message(format!("Changed level; splitting timer...").as_str());
                 }
 
-                if current_state.pro_goals_completed > prev_state.pro_goals_completed {
+                if current_state.pro_goals_completed > prev_state.pro_goals_completed && prev_state.pro_goals_completed == 0 {
                     asr::timer::split();
                     asr::print_message(format!("Completed pro goal; splitting timer...").as_str());
                 }

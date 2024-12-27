@@ -101,7 +101,7 @@ fn get_fname(process: &Process, base_addr: Address, offsets: &Offsets, id: u64) 
     let chunk_offset = key >> 16;
     let name_offset = key & u16::MAX as u32;
 
-    let name_entry = match process.read_pointer_path64::<i16>(base_addr, &vec!(offsets.fnamepool as u64 + ((chunk_offset * 0x8) + 0x10) as u64, (name_offset * 0x2) as u64)) {
+    let name_entry = match process.read_pointer_path::<i16>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.fnamepool as u64 + ((chunk_offset * 0x8) + 0x10) as u64, (name_offset * 0x2) as u64)) {
         Ok(v) => v,
         Err(_) => 0,
     };
@@ -110,7 +110,7 @@ fn get_fname(process: &Process, base_addr: Address, offsets: &Offsets, id: u64) 
 
     let mut result_bytes = vec!();
     for i in 0..name_length {
-        let c = match process.read_pointer_path64::<u8>(base_addr, &vec!(offsets.fnamepool as u64 + ((chunk_offset * 0x8) + 0x10) as u64, ((name_offset * 0x2) + 2 + i as u32) as u64)) {
+        let c = match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.fnamepool as u64 + ((chunk_offset * 0x8) + 0x10) as u64, ((name_offset * 0x2) + 2 + i as u32) as u64)) {
             Ok(v) => v,
             Err(_) => 0,
         };
@@ -159,14 +159,14 @@ impl Career {
     pub fn update(&mut self, process: &Process, base_addr: Address, offsets: &Offsets, skater_fname: u64, old_count: u32) {
         // collect all completed goals and apply them to the career goals
         // go through each career until you find the one for the expected skater
-        let career_count = match process.read_pointer_path64::<u32>(base_addr, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xd8 as u64)) {
+        let career_count = match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xd8 as u64)) {
             Ok(v) => v,
             Err(_) => 0,
         };
 
         let mut career_offset = -1;
         for i in 0..career_count {
-            let career_fname = match process.read_pointer_path64::<u64>(base_addr, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (i * 0x60) as u64)) {
+            let career_fname = match process.read_pointer_path::<u64>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (i * 0x60) as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             };
@@ -177,13 +177,13 @@ impl Career {
         }
 
         if career_offset != -1 {
-            let goal_count = match process.read_pointer_path64::<u32>(base_addr, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (career_offset as u64 * 0x60) + 0x10 as u64)) {
+            let goal_count = match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (career_offset as u64 * 0x60) + 0x10 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             };
 
             for i in old_count..goal_count {
-                let goal_fname = match process.read_pointer_path64::<u64>(base_addr, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (career_offset as u64 * 0x60) + 0x8 as u64, (i as u64 * 0x30) + 0x10 as u64)) {
+                let goal_fname = match process.read_pointer_path::<u64>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (career_offset as u64 * 0x60) + 0x8 as u64, (i as u64 * 0x30) + 0x10 as u64)) {
                     Ok(v) => v,
                     Err(_) => 0,
                 };
@@ -200,21 +200,21 @@ impl State {
     pub fn update(process: &Process, base_addr: Address, offsets: &Offsets) -> Self {
         // name ID of skater, but that does not matter, we just need to match it to the career
         //let skater_fname = match process.read_pointer_path64::<u64>(base_addr, &vec!(0x3d78170 as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0x130 as u64)) {
-        let skater_fname = match process.read_pointer_path64::<u64>(base_addr, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0x130 as u64)) {
+        let skater_fname = match process.read_pointer_path::<u64>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0x130 as u64)) {
             Ok(v) => v,
             Err(_) => 0,
         };
 
         // lol this is very stupid, but I can't find any other way to do it!
         // go through each career until you find the one for the expected skater
-        let career_count = match process.read_pointer_path64::<u32>(base_addr, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xd8 as u64)) {
+        let career_count = match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xd8 as u64)) {
             Ok(v) => v,
             Err(_) => 0,
         };
 
         let mut career_offset = -1;
         for i in 0..career_count {
-            let career_fname = match process.read_pointer_path64::<u64>(base_addr, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (i * 0x60) as u64)) {
+            let career_fname = match process.read_pointer_path::<u64>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (i * 0x60) as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             };
@@ -226,25 +226,25 @@ impl State {
 
         let mut goal_count = 0;
         if career_offset != -1 {
-            goal_count = match process.read_pointer_path64::<u32>(base_addr, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (career_offset as u64 * 0x60) + 0x10 as u64)) {
+            goal_count = match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (career_offset as u64 * 0x60) + 0x10 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             };
         }
 
-        let level_fname = match process.read_pointer_path64::<u64>(base_addr, &vec!(offsets.uworld as u64, 0x18 as u64)) {
+        let level_fname = match process.read_pointer_path::<u64>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.uworld as u64, 0x18 as u64)) {
             Ok(v) => v,
             Err(_) => 0,
         };
 
-        let msg_len = match process.read_pointer_path64::<u8>(base_addr, &vec!(offsets.run_state as u64 + 0xD1)) {
+        let msg_len = match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.run_state as u64 + 0xD1)) {
             Ok(v) => v,
             Err(_) => 0,
         };
 
         let mut msg_bytes = vec!();
         for i in 0..msg_len {
-            let c = match process.read_pointer_path64::<u8>(base_addr, &vec!(offsets.run_state as u64 + 0xD2 + i as u64)) {
+            let c = match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.run_state as u64 + 0xD2 + i as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             };
@@ -268,7 +268,7 @@ impl State {
             // check that the last log message was the start message to know if we're running TODO: in the future when verifying AG&G, we'll need to look for match_end
             is_running: msg == "dlog_event_client_match_start",
 
-            is_loading: match process.read_pointer_path64::<u8>(base_addr, &vec!(offsets.uworld as u64, 0x11F as u64)) {
+            is_loading: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.uworld as u64, 0x11F as u64)) {
                 Ok(v) => v & 0x01 != 0,
                 Err(_) => false,
             },

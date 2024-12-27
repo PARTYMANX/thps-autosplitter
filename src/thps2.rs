@@ -51,7 +51,7 @@ impl State {
         let mut goal_count = 0;
 
         // get skater
-        let skater_id = match process.read_pointer_path32::<i32>(base_addr, &vec!(0x1674b8 as u32, 0x2cc0 as u32)) {
+        let skater_id = match process.read_pointer_path::<i32>(base_addr, asr::PointerSize::Bit32, &vec!(0x1674b8 as u64, 0x2cc0 as u64)) {
             Ok(v) => v,
             Err(_) => -1,
         };

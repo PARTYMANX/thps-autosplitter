@@ -21,9 +21,9 @@ enum Module {
 
 impl State {
     pub fn _check_for_reset(process: &Process, base_addr: Address) -> bool {
-        let module = match process.read_pointer_path32::<u32>(base_addr, &vec!(0x139db4 as u32, 0x3c as u32)) {
+        let module = match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(0x139db4 as u64, 0x3c as u64)) {
             Ok(v) => {
-                match process.read_pointer_path32::<u32>(base_addr, &vec!(0x139db4 as u32, v + 0x1c as u32)) {
+                match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(0x139db4 as u64, (v + 0x1c) as u64)) {
                     Ok(v) => {
                         //asr::print_message(&format!("MODULE SIZE: {}", v));
                         if v == 0x43000 {
@@ -42,7 +42,7 @@ impl State {
 
         if matches!(module, Module::Frontend) {
             for i in 0..9 {
-                let goal_count = match process.read_pointer_path32::<u8>(base_addr, &vec!(0x850d0 + (i * 0x38) as u32)) {
+                let goal_count = match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x850d0 + (i * 0x38) as u64)) {
                     Ok(v) => v,
                     Err(_) => 0,
                 };
@@ -64,9 +64,9 @@ impl State {
         let mut goal_count = 0;
 
         // get currently loaded module
-        let module = match process.read_pointer_path32::<u32>(base_addr, &vec!(0x139db4 as u32, 0x3c as u32)) {
+        let module = match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(0x139db4 as u64, 0x3c as u64)) {
             Ok(v) => {
-                match process.read_pointer_path32::<u32>(base_addr, &vec!(0x139db4 as u32, v + 0x1c as u32)) {
+                match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(0x139db4 as u64, (v + 0x1c) as u64)) {
                     Ok(v) => {
                         //asr::print_message(&format!("MODULE SIZE: {}", v));
                         if v == 0x43000 {
@@ -98,7 +98,7 @@ impl State {
                 }
             },
             Module::Frontend => {
-                let rider_id = match process.read_pointer_path32::<u8>(base_addr, &vec!(0x139db4 as u32, 0x190534 as u32)) {
+                let rider_id = match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x139db4 as u64, 0x190534 as u64)) {
                     Ok(v) => v,
                     Err(_) => 0xff,
                 };
@@ -106,7 +106,7 @@ impl State {
                 if rider_id <= 9 {    // TODO: figure out secret skaters
                     let rider_profile = 0x850d0 + (rider_id as u32 * 0x38);
         
-                    match process.read_pointer_path32::<u8>(base_addr, &vec!(0x139db4 as u32, rider_profile + 4 + 6)) {
+                    match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x139db4 as u64, (rider_profile + 4 + 6) as u64)) {
                         Ok(v) => {
                             if v != 0 {
                                 medal_count += 1
@@ -114,7 +114,7 @@ impl State {
                         },
                         Err(_) => {},
                     };
-                    match process.read_pointer_path32::<u8>(base_addr, &vec!(0x139db4 as u32, rider_profile + 4 + 7)) {
+                    match process.read_pointer_path::<u8>(base_addr,asr::PointerSize::Bit32, &vec!(0x139db4 as u64, (rider_profile + 4 + 7) as u64)) {
                         Ok(v) => {
                             if v != 0 {
                                 medal_count += 1
@@ -123,12 +123,12 @@ impl State {
                         Err(_) => {},
                     };
         
-                    goal_count = match process.read_pointer_path32::<u8>(base_addr, &vec!(0x139db4 as u32, rider_profile)) {
+                    goal_count = match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x139db4 as u64, rider_profile as u64)) {
                         Ok(v) => v,
                         Err(_) => 0,
                     };
 
-                    gold_count = match process.read_pointer_path32::<u8>(base_addr, &vec!(0x139db4 as u32, rider_profile + 3)) {
+                    gold_count = match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x139db4 as u64, (rider_profile + 3) as u64)) {
                         Ok(v) => v,
                         Err(_) => 0,
                     };
@@ -143,14 +143,14 @@ impl State {
                     _gold_count: gold_count as u32,
                     medal_count,
                     goal_count,
-                    is_loading: match process.read_pointer_path32::<u32>(base_addr, &vec!(0x139db4 as u32, 0x84824 as u32)) {
+                    is_loading: match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(0x139db4 as u64, 0x84824 as u64)) {
                         Ok(v) => v == 0,
                         Err(_) => false,
                     },
                 }
             },
             Module::Game => {
-                let rider_id = match process.read_pointer_path32::<u8>(base_addr, &vec!(0x139db4 as u32, 0x220a96 as u32)) {
+                let rider_id = match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x139db4 as u64, 0x220a96 as u64)) {
                     Ok(v) => v,
                     Err(_) => 0xff,
                 };
@@ -158,7 +158,7 @@ impl State {
                 if rider_id <= 9 {
                     let rider_profile = 0x221290 + (rider_id as u32 * 0x38);
         
-                    match process.read_pointer_path32::<u8>(base_addr, &vec!(0x139db4 as u32, rider_profile + 4 + 6)) {
+                    match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x139db4 as u64, (rider_profile + 4 + 6) as u64)) {
                         Ok(v) => {
                             if v != 0 {
                                 medal_count += 1
@@ -166,7 +166,7 @@ impl State {
                         },
                         Err(_) => {},
                     };
-                    match process.read_pointer_path32::<u8>(base_addr, &vec!(0x139db4 as u32, rider_profile + 4 + 7)) {
+                    match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x139db4 as u64, (rider_profile + 4 + 7) as u64)) {
                         Ok(v) => {
                             if v != 0 {
                                 medal_count += 1
@@ -175,29 +175,29 @@ impl State {
                         Err(_) => {},
                     };
         
-                    goal_count = match process.read_pointer_path32::<u8>(base_addr, &vec!(0x139db4 as u32, rider_profile)) {
+                    goal_count = match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x139db4 as u64, rider_profile as u64)) {
                         Ok(v) => v,
                         Err(_) => 0,
                     };
 
-                    gold_count = match process.read_pointer_path32::<u8>(base_addr, &vec!(0x139db4 as u32, rider_profile + 3)) {
+                    gold_count = match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x139db4 as u64, (rider_profile + 3) as u64)) {
                         Ok(v) => v,
                         Err(_) => 0,
                     };
                 }
         
                 State {
-                    is_timer_running: match process.read_pointer_path32::<bool>(base_addr, &vec!(0x139db4 as u32, 0xc6438 as u32)) {
+                    is_timer_running: match process.read_pointer_path::<bool>(base_addr, asr::PointerSize::Bit32, &vec!(0x139db4 as u64, 0xc6438 as u64)) {
                         Ok(v) => v,
                         Err(_) => false,
                     },
         
-                    level_id: match process.read_pointer_path32::<u8>(base_addr, &vec!(0x139db4 as u32, 0x220a93 as u32)) {
+                    level_id: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x139db4 as u64, 0x220a93 as u64)) {
                         Ok(v) => v,
                         Err(_) => 0,
                     },
         
-                    mode: match process.read_pointer_path32::<u8>(base_addr, &vec!(0x139db4 as u32, 0x220ab0 as u32)) {
+                    mode: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x139db4 as u64, 0x220ab0 as u64)) {
                         Ok(v) => v,
                         Err(_) => 0,
                     },
@@ -205,7 +205,7 @@ impl State {
                     module,
         
                     // used for igt only, so clamp it to max run time
-                    _timer_vblanks: match process.read_pointer_path32::<u32>(base_addr, &vec!(0x139db4 as u32, 0xc61dc as u32)) {
+                    _timer_vblanks: match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(0x139db4 as u64, 0xc61dc as u64)) {
                         Ok(v) => {
                             // possibly CBruce + 2cc0 is time left??
                             let level_id = match process.read::<u32>(base_addr + 0x15e8f0 as u32) {
@@ -230,10 +230,10 @@ impl State {
                     medal_count: medal_count,
                     goal_count: goal_count,
 
-                    is_loading: match process.read_pointer_path32::<u8>(base_addr, &vec!(0x139db4 as u32, 0xbc6b0 as u32)) {
+                    is_loading: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x139db4 as u64, 0xbc6b0 as u64)) {
                         Ok(v) => v != 0,
                         Err(_) => false,
-                    } || match process.read_pointer_path32::<u8>(base_addr, &vec!(0x139db4 as u32, 0xbc598 as u32)) {
+                    } || match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x139db4 as u64, 0xbc598 as u64)) {
                         Ok(v) => v == 0,
                         Err(_) => false,
                     },

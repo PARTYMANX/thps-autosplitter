@@ -1,5 +1,7 @@
 use asr::{Address, Process, timer::TimerState};
 
+use crate::settings::Settings;
+
 struct State {
     level_id: u8,
     total_cash: u32,
@@ -42,7 +44,7 @@ impl State {
     }
 }
 
-pub async fn run(process: &Process, process_name: &str) {
+pub async fn run(process: &Process, process_name: &str, settings: &Settings) {
     asr::print_message("Attached to THPS4!");
     asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
 
@@ -65,37 +67,37 @@ pub async fn run(process: &Process, process_name: &str) {
 
         match asr::timer::state() {
             TimerState::NotRunning => {
-                if current_state.level_id == 1 && prev_state.level_id == 0 && current_state.pro_points == 0 {
+                if settings.auto_start && current_state.level_id == 1 && prev_state.level_id == 0 && current_state.pro_points == 0 {
                     asr::timer::start();
                     asr::print_message(format!("Starting timer...").as_str());
                 }
             },
             TimerState::Paused | TimerState::Running => {
                 // split on level changes (except skateshop)
-                if current_state.level_id != prev_state.level_id && current_state.level_id != 0 {
+                if settings.auto_split && current_state.level_id != prev_state.level_id && current_state.level_id != 0 {
                     asr::timer::split();
                     asr::print_message(format!("Changed level; splitting timer...").as_str());
                 }
 
-                if current_state.pro_goals_completed > prev_state.pro_goals_completed && prev_state.pro_goals_completed == 0 {
+                if settings.auto_split && current_state.pro_goals_completed > prev_state.pro_goals_completed && prev_state.pro_goals_completed == 0 {
                     asr::timer::split();
                     asr::print_message(format!("Completed pro goal; splitting timer...").as_str());
                 }
 
                 // split when all goals cleared (190 pro points)
-                if current_state.pro_points != prev_state.pro_points && current_state.pro_points == 190 {
+                if settings.auto_split && current_state.pro_points != prev_state.pro_points && current_state.pro_points == 190 {
                     asr::timer::split();
                     asr::print_message(format!("Completed all goals; splitting timer...").as_str());
                 }
 
                 // split on all cash collected
-                if current_state.total_cash != prev_state.total_cash && current_state.total_cash == 100000 {
+                if settings.auto_split && current_state.total_cash != prev_state.total_cash && current_state.total_cash == 100000 {
                     asr::timer::split();
                     asr::print_message(format!("All cash collected; splitting timer...").as_str());
                 }
 
                 // reset when on skateshop with 0 pro points
-                if current_state.level_id == 0 && current_state.pro_points == 0 {
+                if settings.auto_reset && current_state.level_id == 0 && current_state.pro_points == 0 {
                     asr::timer::reset();
                     asr::print_message(format!("Resetting timer...").as_str());
                 }

@@ -1,5 +1,7 @@
 use asr::{Address, Process, timer::TimerState, time::Duration};
 
+use crate::settings::Settings;
+
 // looking for things TODO: implement these alternate offsets based off of the Activision Value release executable:
 // level 0x561c90 / 0x161c90
 // also possibly 0x56a898
@@ -145,7 +147,7 @@ impl State {
     }
 }
 
-pub async fn run(process: &Process, process_name: &str) {
+pub async fn run(process: &Process, process_name: &str, settings: &Settings) {
     asr::print_message("Attached to THPS2!");
     asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
 
@@ -168,7 +170,7 @@ pub async fn run(process: &Process, process_name: &str) {
                     game_done = false;
                 }
 
-                if current_state.mode == 1 && current_state.goal_count == 0 && current_state.level_id == 0 && current_state.is_timer_running {
+                if settings.auto_start && current_state.mode == 1 && current_state.goal_count == 0 && current_state.level_id == 0 && current_state.is_timer_running {
                     asr::timer::start();
                     asr::print_message(format!("Starting timer...").as_str());
 
@@ -182,7 +184,7 @@ pub async fn run(process: &Process, process_name: &str) {
                     level_changed = true;
                 }
 
-                if current_state.screen == 6 && level_changed {
+                if settings.auto_split && current_state.screen == 6 && level_changed {
                     level_changed = false;
                     asr::timer::split();
                     asr::print_message(format!("Changed levels; splitting timer...").as_str());
@@ -190,14 +192,14 @@ pub async fn run(process: &Process, process_name: &str) {
 
                 // split when all medals collected 
                 // TODO: add setting to only split when all goals and goals are collected
-                if !game_done && current_state.medal_count == 3 {
+                if settings.auto_split && !game_done && current_state.medal_count == 3 {
                     game_done = true;
                     asr::timer::split();
                     asr::print_message(format!("Collected all medals; splitting timer...").as_str());
                 }
 
                 // reset when on a menu and no goals are complete on any skater
-                if current_state.screen != 6 && State::check_for_reset(process, base_addr) {
+                if settings.auto_reset && current_state.screen != 6 && State::check_for_reset(process, base_addr) {
                     asr::timer::reset();
                     asr::print_message(format!("Resetting timer...").as_str());
 

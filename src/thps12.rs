@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use asr::{Address, Process, timer::TimerState, signature::Signature};
 use once_cell::sync::Lazy;
 
+use crate::settings::Settings;
+
 struct Offsets {
     fnamepool: u64,
     uworld: u64,
@@ -276,7 +278,7 @@ impl State {
     }
 }
 
-pub async fn run(process: &Process, process_name: &str) {
+pub async fn run(process: &Process, process_name: &str, settings: &Settings) {
     asr::print_message("Attached to THPS1+2!");
     asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
 
@@ -348,7 +350,7 @@ pub async fn run(process: &Process, process_name: &str) {
         match asr::timer::state() {
             TimerState::NotRunning => {
                 // start when no goals have been completed and starting a first level
-                if starting_game && current_state.goal_count == 0 && current_state.is_running {
+                if settings.auto_start && starting_game && current_state.goal_count == 0 && current_state.is_running {
                     asr::timer::start();
                     asr::print_message(format!("Starting timer...").as_str());
                     starting_game = false;
@@ -356,34 +358,34 @@ pub async fn run(process: &Process, process_name: &str) {
             },
             TimerState::Paused | TimerState::Running => {
                 // split on level changes (except frontend)
-                if !starting_game && !current_state.level_name.is_empty() && current_state.level_name != prev_state.level_name && current_state.level_name != "FrontEnd" {
+                if settings.auto_split && !starting_game && !current_state.level_name.is_empty() && current_state.level_name != prev_state.level_name && current_state.level_name != "FrontEnd" {
                     asr::timer::split();
                     asr::print_message(format!("Changed level; splitting timer...").as_str());
                 }
 
                 // split when second game is started
-                if ((roswell_medal && current_state.level_name == "Hangar") || (bullring_medal && current_state.level_name == "Warehouse")) && starting_game && current_state.is_running {
+                if settings.auto_split && ((roswell_medal && current_state.level_name == "Hangar") || (bullring_medal && current_state.level_name == "Warehouse")) && starting_game && current_state.is_running {
                     asr::timer::split();
                     asr::print_message(format!("Changed level; splitting timer...").as_str());
                     starting_game = false;
                 }
 
                 // split when roswell medal is collected
-                if career.goals[8][0] && !roswell_medal {
+                if settings.auto_split && career.goals[8][0] && !roswell_medal {
                     roswell_medal = true;
                     asr::timer::split();
                     asr::print_message(format!("Got Roswell medal; splitting timer...").as_str());
                 }
 
                 // split when bullring medal is collected
-                if career.goals[16][0] && !bullring_medal {
+                if settings.auto_split && career.goals[16][0] && !bullring_medal {
                     bullring_medal = true;
                     asr::timer::split();
                     asr::print_message(format!("Got Bullring medal; splitting timer...").as_str());
                 }
 
                 // reset when on frontend with 0 pro points
-                if current_state.level_name == "FrontEnd" && current_state.goal_count == 0 {
+                if settings.auto_reset && current_state.level_name == "FrontEnd" && current_state.goal_count == 0 {
                     asr::timer::reset();
                     asr::print_message(format!("Resetting timer...").as_str());
                 }

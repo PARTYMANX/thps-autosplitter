@@ -268,8 +268,8 @@ impl State {
             // check that the last log message was the start message to know if we're running TODO: in the future when verifying AG&G, we'll need to look for match_end
             is_running: msg == "dlog_event_client_match_start",
 
-            is_loading: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.uworld as u64, 0x11F as u64)) {
-                Ok(v) => v & 0x01 != 0,
+            is_loading: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.uworld as u64, 0x11B as u64)) {
+                Ok(v) => v & 0x02 == 0,
                 Err(_) => false,
             },
         }

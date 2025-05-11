@@ -2,8 +2,6 @@ use std::{collections::HashSet, rc::Rc, cell::RefCell};
 
 use asr::{Address, Process, signature::Signature, timer::TimerState};
 
-use crate::settings::Settings;
-
 struct Offsets {
     skmodule: u32,
     load_counter: u32,
@@ -443,7 +441,7 @@ static CASINO_GOALS: [u32; 7] = [
     0xd67b166d,
 ];
 
-pub async fn run(process: &Process, process_name: &str, settings: &Settings) {
+pub async fn run(process: &Process, process_name: &str) {
     asr::print_message("Attached to THAW!");
     asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
 
@@ -527,7 +525,7 @@ pub async fn run(process: &Process, process_name: &str, settings: &Settings) {
                 }
 
                 // start classic when level == 11 from menu
-                if settings.auto_start && current_state.level_id == 11 && prev_state.level_id == 0 && current_state.classic_goals == 0 {
+                if current_state.level_id == 11 && prev_state.level_id == 0 && current_state.classic_goals == 0 {
                     asr::timer::start();
                     asr::print_message(&format!("Starting timer for Classic..."));
                     mode = Gamemode::CLASSIC;
@@ -542,135 +540,134 @@ pub async fn run(process: &Process, process_name: &str, settings: &Settings) {
                             asr::timer::resume_game_time();
                             asr::print_message(format!("Done loading!").as_str());
                         }
-                        if settings.auto_split {
-                            // split on unlock or visit beverly hills
-                            if !story_flags[0] && (completed_goals.contains(&0x7a446a0a) || (current_state.level_id == 2 && prev_state.level_id != 2)) {
-                                asr::timer::split();
-                                asr::print_message(format!("Unlocked or skipped to Beverly Hills; splitting timer...").as_str());
-                                story_flags[0] = true;
-                            }
 
-                            // split on unlock or visit beverly hills
-                            if !story_flags[1] {
-                                // calculate ranch unlock conditions
-                                let mut ranch_conditions = 0;
-                                ranch_conditions += match current_state.story_difficulty {
-                                    Difficulty::UNKNOWN => 0,
-                                    Difficulty::EASY => 2,
-                                    Difficulty::NORMAL => 1,
-                                    Difficulty::SICK => 0,
-                                };
+                        // split on unlock or visit beverly hills
+                        if !story_flags[0] && (completed_goals.contains(&0x7a446a0a) || (current_state.level_id == 2 && prev_state.level_id != 2)) {
+                            asr::timer::split();
+                            asr::print_message(format!("Unlocked or skipped to Beverly Hills; splitting timer...").as_str());
+                            story_flags[0] = true;
+                        }
 
-                                for i in RANCH_GOALS {
-                                    if current_state.completed_goals.borrow().contains(&i) {
-                                        ranch_conditions += 1;
-                                    }
-                                }
+                        // split on unlock or visit beverly hills
+                        if !story_flags[1] {
+                            // calculate ranch unlock conditions
+                            let mut ranch_conditions = 0;
+                            ranch_conditions += match current_state.story_difficulty {
+                                Difficulty::UNKNOWN => 0,
+                                Difficulty::EASY => 2,
+                                Difficulty::NORMAL => 1,
+                                Difficulty::SICK => 0,
+                            };
 
-                                if ranch_conditions >= 3 {
-                                    asr::timer::split();
-                                    asr::print_message(format!("Unlocked Skate Ranch; splitting timer...").as_str());
-                                    story_flags[1] = true;
+                            for i in RANCH_GOALS {
+                                if current_state.completed_goals.borrow().contains(&i) {
+                                    ranch_conditions += 1;
                                 }
                             }
 
-                            // split on unlock downtown
-                            if !story_flags[2] && completed_goals.contains(&0x8f0cd51c) {
+                            if ranch_conditions >= 3 {
                                 asr::timer::split();
-                                asr::print_message(format!("Unlocked Downtown; splitting timer...").as_str());
-                                story_flags[2] = true;
-                            }
-
-                            // split on unlock amjam
-                            if !story_flags[3] && completed_goals.contains(&0x607572ca) {
-                                asr::timer::split();
-                                asr::print_message(format!("Unlocked Amjam; splitting timer...").as_str());
-                                story_flags[3] = true;
-                            }
-
-                            // split on win amjam
-                            if !story_flags[4] && completed_goals.contains(&0x3a800176) {
-                                asr::timer::split();
-                                asr::print_message(format!("Won Amjam; splitting timer...").as_str());
-                                story_flags[4] = true;
-                            }
-
-                            // split on unlock santa monica
-                            if !story_flags[5] && completed_goals.contains(&0xb9415865) {
-                                asr::timer::split();
-                                asr::print_message(format!("Unlocked Santa Monica; splitting timer...").as_str());
-                                story_flags[5] = true;
-                            }
-
-                            // split on unlock oil rig
-                            if !story_flags[6] && completed_goals.contains(&0xea9af00c) {
-                                asr::timer::split();
-                                asr::print_message(format!("Unlocked Oil Rig; splitting timer...").as_str());
-                                story_flags[6] = true;
-                            }
-
-                            // split on finish oil rig
-                            if !story_flags[7] && completed_goals.contains(&0xd32df1bb) {
-                                asr::timer::split();
-                                asr::print_message(format!("Finished Oil Rig; splitting timer...").as_str());
-                                story_flags[7] = true;
-                            }
-
-                            // split on unlock east la
-                            if !story_flags[8] && completed_goals.contains(&0xda77ca92) {
-                                asr::timer::split();
-                                asr::print_message(format!("Unlocked East LA; splitting timer...").as_str());
-                                story_flags[8] = true;
-                            }
-
-                            // split on unlock santa monica
-                            if !story_flags[9] && completed_goals.contains(&0x97e3e2cf) {
-                                asr::timer::split();
-                                asr::print_message(format!("Started Pro Goals; splitting timer...").as_str());
-                                story_flags[9] = true;
-                            }
-
-                            // split on unlock casino
-                            if !story_flags[10] && completed_goals.contains(&0x82510d90) {
-                                asr::timer::split();
-                                asr::print_message(format!("Unlocked Casino; splitting timer...").as_str());
-                                story_flags[10] = true;
-                            }
-
-                            // split on unlock final goal
-                            if !story_flags[11] {
-                                // calculate ranch unlock conditions
-                                let mut unlock_conditions = 0;
-                                unlock_conditions += match current_state.story_difficulty {
-                                    Difficulty::UNKNOWN => 0,
-                                    Difficulty::EASY => 3,
-                                    Difficulty::NORMAL => 2,
-                                    Difficulty::SICK => 0,
-                                };
-
-                                for i in CASINO_GOALS {
-                                    if current_state.completed_goals.borrow().contains(&i) {
-                                        unlock_conditions += 1;
-                                    }
-                                }
-
-                                if unlock_conditions >= 7 {
-                                    asr::timer::split();
-                                    asr::print_message(format!("Unlocked final goal; splitting timer...").as_str());
-                                    story_flags[11] = true;
-                                }
-                            }
-
-                            // split on final goal
-                            if !story_flags[12] && completed_goals.contains(&0x99156422) {
-                                asr::timer::split();
-                                asr::print_message(format!("Completed final goal; splitting timer...").as_str());
-                                story_flags[12] = true;
+                                asr::print_message(format!("Unlocked Skate Ranch; splitting timer...").as_str());
+                                story_flags[1] = true;
                             }
                         }
 
+                        // split on unlock downtown
+                        if !story_flags[2] && completed_goals.contains(&0x8f0cd51c) {
+                            asr::timer::split();
+                            asr::print_message(format!("Unlocked Downtown; splitting timer...").as_str());
+                            story_flags[2] = true;
+                        }
+
+                        // split on unlock amjam
+                        if !story_flags[3] && completed_goals.contains(&0x607572ca) {
+                            asr::timer::split();
+                            asr::print_message(format!("Unlocked Amjam; splitting timer...").as_str());
+                            story_flags[3] = true;
+                        }
+
+                        // split on win amjam
+                        if !story_flags[4] && completed_goals.contains(&0x3a800176) {
+                            asr::timer::split();
+                            asr::print_message(format!("Won Amjam; splitting timer...").as_str());
+                            story_flags[4] = true;
+                        }
+
+                        // split on unlock santa monica
+                        if !story_flags[5] && completed_goals.contains(&0xb9415865) {
+                            asr::timer::split();
+                            asr::print_message(format!("Unlocked Santa Monica; splitting timer...").as_str());
+                            story_flags[5] = true;
+                        }
+
+                        // split on unlock oil rig
+                        if !story_flags[6] && completed_goals.contains(&0xea9af00c) {
+                            asr::timer::split();
+                            asr::print_message(format!("Unlocked Oil Rig; splitting timer...").as_str());
+                            story_flags[6] = true;
+                        }
+
+                        // split on finish oil rig
+                        if !story_flags[7] && completed_goals.contains(&0xd32df1bb) {
+                            asr::timer::split();
+                            asr::print_message(format!("Finished Oil Rig; splitting timer...").as_str());
+                            story_flags[7] = true;
+                        }
+
+                        // split on unlock east la
+                        if !story_flags[8] && completed_goals.contains(&0xda77ca92) {
+                            asr::timer::split();
+                            asr::print_message(format!("Unlocked East LA; splitting timer...").as_str());
+                            story_flags[8] = true;
+                        }
+
+                        // split on unlock santa monica
+                        if !story_flags[9] && completed_goals.contains(&0x97e3e2cf) {
+                            asr::timer::split();
+                            asr::print_message(format!("Started Pro Goals; splitting timer...").as_str());
+                            story_flags[9] = true;
+                        }
+
+                        // split on unlock casino
+                        if !story_flags[10] && completed_goals.contains(&0x82510d90) {
+                            asr::timer::split();
+                            asr::print_message(format!("Unlocked Casino; splitting timer...").as_str());
+                            story_flags[10] = true;
+                        }
+
+                        // split on unlock final goal
+                        if !story_flags[11] {
+                            // calculate ranch unlock conditions
+                            let mut unlock_conditions = 0;
+                            unlock_conditions += match current_state.story_difficulty {
+                                Difficulty::UNKNOWN => 0,
+                                Difficulty::EASY => 3,
+                                Difficulty::NORMAL => 2,
+                                Difficulty::SICK => 0,
+                            };
+
+                            for i in CASINO_GOALS {
+                                if current_state.completed_goals.borrow().contains(&i) {
+                                    unlock_conditions += 1;
+                                }
+                            }
+
+                            if unlock_conditions >= 7 {
+                                asr::timer::split();
+                                asr::print_message(format!("Unlocked final goal; splitting timer...").as_str());
+                                story_flags[11] = true;
+                            }
+                        }
+
+                        // split on final goal
+                        if !story_flags[12] && completed_goals.contains(&0x99156422) {
+                            asr::timer::split();
+                            asr::print_message(format!("Completed final goal; splitting timer...").as_str());
+                            story_flags[12] = true;
+                        }
+
                         // reset on 0 goals complete on menu
-                        if settings.auto_reset && current_state.level_id == 0 && current_state.story_goals == 0 {
+                        if current_state.level_id == 0 && current_state.story_goals == 0 {
                             asr::timer::reset();
                             asr::print_message(format!("Resetting timer...").as_str());
                             story_flags.fill(false);
@@ -687,22 +684,20 @@ pub async fn run(process: &Process, process_name: &str, settings: &Settings) {
                             asr::print_message(format!("Done loading!").as_str());
                         }
 
-                        if settings.auto_split {
-                            // split on level changes (except main menu)
-                            if current_state.level_id != prev_state.level_id && current_state.level_id != 0 {
-                                asr::timer::split();
-                                asr::print_message(format!("Changed level; splitting timer...").as_str());
-                            }
+                        // split on level changes (except main menu)
+                        if current_state.level_id != prev_state.level_id && current_state.level_id != 0 {
+                            asr::timer::split();
+                            asr::print_message(format!("Changed level; splitting timer...").as_str());
+                        }
 
-                            // split on end run when 51 goals are complete
-                            if current_state.classic_goals >= 51 && !current_state.run_is_active && prev_state.run_is_active {  // FIXME: goes off when restarting
-                                asr::timer::split();
-                                asr::print_message(format!("Classic complete; splitting timer...").as_str());
-                            }
+                        // split on end run when 51 goals are complete
+                        if current_state.classic_goals >= 51 && !current_state.run_is_active && prev_state.run_is_active {  // FIXME: goes off when restarting
+                            asr::timer::split();
+                            asr::print_message(format!("Classic complete; splitting timer...").as_str());
                         }
 
                         // reset on 0 goals complete on menu
-                        if settings.auto_reset && current_state.level_id == 0 && current_state.classic_goals == 0 {
+                        if current_state.level_id == 0 && current_state.classic_goals == 0 {
                             asr::timer::reset();
                             asr::print_message(format!("Resetting timer...").as_str());
                         }

@@ -1,7 +1,5 @@
 use asr::{Address, Process, timer::TimerState};
 
-use crate::settings::Settings;
-
 struct State {
     level_id: u8,
     total_classic_goals: u8,
@@ -222,7 +220,7 @@ enum Gamemode {
     CLASSIC,
 }
 
-pub async fn run(process: &Process, process_name: &str, settings: &Settings) {
+pub async fn run(process: &Process, process_name: &str) {
     asr::print_message("Attached to THUG2!");
     asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
 
@@ -252,13 +250,13 @@ pub async fn run(process: &Process, process_name: &str, settings: &Settings) {
         match asr::timer::state() {
             TimerState::NotRunning => {
                 // story
-                if settings.auto_start && current_state.level_id == 1 && prev_state.level_id == 9 {
+                if current_state.level_id == 1 && prev_state.level_id == 9 {
                     asr::timer::start();
                     asr::print_message(format!("Starting timer for story mode...").as_str());
                     mode = Gamemode::CAREER;
                 }
                 // classic
-                if settings.auto_start && current_state.level_id == 2 && prev_state.level_id == 0 && current_state.total_classic_goals == 0 {
+                if current_state.level_id == 2 && prev_state.level_id == 0 && current_state.total_classic_goals == 0 {
                     asr::timer::start();
                     asr::print_message(format!("Starting timer for classic mode...").as_str());
                     mode = Gamemode::CLASSIC;
@@ -268,30 +266,30 @@ pub async fn run(process: &Process, process_name: &str, settings: &Settings) {
                 match mode {
                     Gamemode::NONE => {},
                     Gamemode::CAREER => {
-                        if settings.auto_split && current_state.level_id != 0 && current_state.level_id != prev_state.level_id {
+                        if current_state.level_id != 0 && current_state.level_id != prev_state.level_id {
                             asr::timer::split();
                             asr::print_message(format!("Changed level; splitting timer...").as_str());
                         } 
                         
-                        if settings.auto_split && current_state.is_game_finished && !prev_state.is_game_finished {
+                        if current_state.is_game_finished && !prev_state.is_game_finished {
                             asr::timer::split();
                             asr::print_message(format!("Final cutscene; splitting timer...").as_str());
                         }
         
                         // reset when story start flag is unset
-                        if settings.auto_reset && current_state.level_id == 0 && !current_state.is_story_started && current_state.story_points == 0 {
+                        if current_state.level_id == 0 && !current_state.is_story_started && current_state.story_points == 0 {
                             asr::timer::reset();
                             asr::print_message(format!("Resetting timer...").as_str());
                             mode = Gamemode::NONE;
                         }
                     },
                     Gamemode::CLASSIC => {
-                        if settings.auto_split && current_state.level_id != 0 && current_state.level_id != prev_state.level_id {
+                        if current_state.level_id != 0 && current_state.level_id != prev_state.level_id {
                             asr::timer::split();
                             asr::print_message(format!("Changed level; splitting timer...").as_str());
                         } 
 
-                        if settings.auto_split && current_state.is_run_ended && !prev_state.is_run_ended && 
+                        if current_state.is_run_ended && !prev_state.is_run_ended && 
                             ((current_state.total_classic_goals < 120 && current_state.classic_difficulty == Difficulty::NORMAL && current_state.classic_triangle_goals >= 6) || 
                             (current_state.total_classic_goals < 120 && current_state.classic_difficulty == Difficulty::SICK && current_state.classic_triangle_goals >= 8) || 
                             (current_state.total_classic_goals == 140)) {
@@ -300,7 +298,7 @@ pub async fn run(process: &Process, process_name: &str, settings: &Settings) {
                         }
 
                         // reset when on 0 goals are completed
-                        if settings.auto_reset && current_state.level_id == 0 && prev_state.total_classic_goals == 0 {
+                        if current_state.level_id == 0 && prev_state.total_classic_goals == 0 {
                             asr::timer::reset();
                             asr::print_message(format!("Resetting timer...").as_str());
                             mode = Gamemode::NONE;

@@ -1,7 +1,5 @@
 use asr::{Address, Process, timer::TimerState};
 
-use crate::settings::Settings;
-
 // NOTES:
 // POINTERS TO LEVEL IN INTEGER: 0x4e1e90 -> 0x134 -> 0x14 -> 0x690
 // POINTERS TO GOAL FLAGS: 0x4e1e90 -> 0x134 -> 0x14 -> 0x564 (EACH SET OF FLAGS IS 8 BYTES, 9 GOALS OR 3 MEDALS.  FOR MEDALS, BRONZE IS LSB)
@@ -114,7 +112,7 @@ impl State {
     }
 }
 
-pub async fn run(process: &Process, process_name: &str, settings: &Settings) {
+pub async fn run(process: &Process, process_name: &str) {
     asr::print_message("Attached to THPS3!");
     asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
 
@@ -174,14 +172,14 @@ pub async fn run(process: &Process, process_name: &str, settings: &Settings) {
                 }
 
                 // when goal cams end, start timer
-                if settings.auto_start && foundry_started && !current_state.is_loading && !current_state.is_paused && current_state.is_timer_running {
+                if foundry_started && !current_state.is_loading && !current_state.is_paused && current_state.is_timer_running {
                     asr::timer::start();
                     asr::print_message(format!("Starting timer...").as_str());
                 }
             },
             TimerState::Paused | TimerState::Running => {
                 // split on level changes (except skateshop and tokyo to cruise ship, since that's handled when the comp ends)
-                if settings.auto_split && current_state.level_id != prev_state.level_id && current_state.level_id != 0 && prev_state.level_id != 8 && current_state.level_id != 9 {
+                if current_state.level_id != prev_state.level_id && current_state.level_id != 0 && prev_state.level_id != 8 && current_state.level_id != 9 {
                     asr::timer::split();
                     asr::print_message(format!("Changed level; splitting timer...").as_str());
                 }
@@ -189,21 +187,21 @@ pub async fn run(process: &Process, process_name: &str, settings: &Settings) {
                 // any% end (end of medal run on tokyo)
                 // NOTE: the check is if we're on tokyo, the competition class is initialized, the competition is over, we're in at least 3rd place. 
                 // because this has been inconsistent in the past, the medal check is a backup if that fails.  the medal count is only updated after the ceremony, so it's going to be late for splitting
-                if settings.auto_split && !tokyo_complete && ((current_state.level_id == 8 && tokyo_started && current_state.comp_is_over && current_state.comp_ranking <= 3) || current_state.medal_count == 3) {
+                if !tokyo_complete && ((current_state.level_id == 8 && tokyo_started && current_state.comp_is_over && current_state.comp_ranking <= 3) || current_state.medal_count == 3) {
                     tokyo_complete = true;
                     asr::timer::split();
                     asr::print_message(format!("Finished Tokyo; splitting timer...").as_str());
                 }
 
                 // ag&g end (all goals and golds collected and run is ended)
-                if settings.auto_split && all_goals_and_golds_complete && !current_state.is_timer_running {
+                if all_goals_and_golds_complete && !current_state.is_timer_running {
                     all_goals_and_golds_complete = false;
                     asr::timer::split();
                     asr::print_message(format!("Collected all goals and golds; splitting timer...").as_str());
                 }
 
                 // reset when going back to skateshop
-                if settings.auto_reset && current_state.level_id == 0 && current_state.goal_count == 0 {
+                if current_state.level_id == 0 && current_state.goal_count == 0 {
                     asr::timer::reset();
                     asr::print_message(format!("Resetting timer...").as_str());
                 }

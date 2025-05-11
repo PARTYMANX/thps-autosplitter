@@ -1,7 +1,5 @@
-use asr::{settings::Gui, Process};
-use settings::Settings;
+use asr::Process;
 
-mod settings;
 mod thps2;
 mod thps3;
 mod thps4;
@@ -14,11 +12,7 @@ mod mhpb;
 asr::async_main!(stable);
 
 async fn main() {
-    let mut settings = Settings::register();
-
     loop {
-        settings.update();
-
         asr::print_message("Looking for process...");
 
         let (&name, &game, process) = asr::future::retry(|| {
@@ -29,14 +23,14 @@ async fn main() {
             asr::print_message(format!("Detected {}", name).as_str());
 
             match game {
-                Game::THPS2 => thps2::run(&process, name, &settings).await,
-                Game::THPS3 => thps3::run(&process, name, &settings).await,
-                Game::THPS4 => thps4::run(&process, name, &settings).await,
-                Game::THUG1 => thug1::run(&process, name, &settings).await,
-                Game::THUG2 => thug2::run(&process, name, &settings).await,
-                Game::THAW => thaw::run(&process, name, &settings).await,
-                Game::THPS12 => thps12::run(&process, name, &settings).await,
-                Game::MHPB => mhpb::run(&process, name, &settings).await,
+                Game::THPS2 => thps2::run(&process, name).await,
+                Game::THPS3 => thps3::run(&process, name).await,
+                Game::THPS4 => thps4::run(&process, name).await,
+                Game::THUG1 => thug1::run(&process, name).await,
+                Game::THUG2 => thug2::run(&process, name).await,
+                Game::THAW => thaw::run(&process, name).await,
+                Game::THPS12 => thps12::run(&process, name).await,
+                Game::MHPB => mhpb::run(&process, name).await,
             }
             
             asr::future::next_tick().await;
@@ -44,7 +38,7 @@ async fn main() {
     
         asr::print_message("Game Closed");
 
-        if settings.auto_reset && matches!(asr::timer::state(), asr::timer::TimerState::Running) || matches!(asr::timer::state(), asr::timer::TimerState::Paused) {
+        if matches!(asr::timer::state(), asr::timer::TimerState::Running) || matches!(asr::timer::state(), asr::timer::TimerState::Paused) {
             asr::timer::reset();
         }
 

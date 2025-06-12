@@ -1,109 +1,140 @@
 use std::collections::HashMap;
 
-use asr::{game_engine::unreal::FNameKey, timer::TimerState, Address, Address64, Process};
+use asr::{Address, Process, timer::TimerState, signature::Signature};
 use once_cell::sync::Lazy;
 
-fn get_fname_string(process: &Process, module: &asr::game_engine::unreal::Module, key: asr::game_engine::unreal::FNameKey) -> String {
-    // if the key is null, return an empty string, otherwise we get "None"
-    if key.is_null() {
-        return "".to_string()
-    }
-
-    match module.get_fname::<256>(process, key) {
-        Ok(v) => {
-            match v.validate_utf8() {
-                Ok(v) => v.to_string(),
-                Err(_) => "".to_string(),
-            }
-        },
-        Err(_) => "".to_string(),
-    }
+struct Offsets {
+    fnamepool: u64,
+    uworld: u64,
+    career: u64,
+    run_state: u64,
 }
 
-fn get_goal_system_pointer(process: &Process, module: &asr::game_engine::unreal::Module) -> Result<asr::Address64, asr::Error> {
-    // find LocalPlayerGoalSystem
-    let subsystem_count = match process.read_pointer_path::<u32>(
-        module.g_world(), 
-        asr::PointerSize::Bit64, 
-        &vec!(
-            0x0 as u64, 
-            0x170 as u64, // GameInstance
-            0x38 as u64, // LocalPlayers
-            0x0 as u64, // Index first array index to get the AlcatrazLocalPlayer instance (maybe make this safer?)
-            0xf0 as u64, // Subsystems I think?
-            //0x98 as u64, // LocalPlayerGoalSystem
-            //0x30 as u64, // GoalSystem
-        ) 
-    ) {
-        Ok(v) => v,
-        Err(e) => return Err(e),
-    };
+/* 
+    SOME NOTES:
+    The run state is not consistent.  I think that's a demonware logging thing which is a bad idea to try and use.  instead I should get the gamemode and hopefully get the timer from there.
+    Also the career cannot be found.  is that a slight struct change throwing off the search?  did the code itself change?  there has to be a better way of getting at that state.
 
-    //asr::print_message(&format!("Subsystem count: {}", subsystem_count));
+    The thing I hope to do is start dumping all objects and figure out what is present in a scene.  hopefully that's not too hard (lol)
+*/
 
-    let mut goal_system_idx = None;
-
-    for i in 0..subsystem_count {
-        let key = match process.read_pointer_path::<FNameKey>(
-            module.g_world(), 
-            asr::PointerSize::Bit64, 
-            &vec!(
-                0x0 as u64, 
-                0x170 as u64, // GameInstance
-                0x38 as u64, // LocalPlayers
-                0x0 as u64, // Index first array index to get the AlcatrazLocalPlayer instance (maybe make this safer?)
-                0xe8 as u64, // Subsystems I think?
-                (i * 24) as u64 + 8 as u64, // index into array
-                0x18 as u64, // get fname key
-                //0x98 as u64, // LocalPlayerGoalSystem
-                //0x30 as u64, // GoalSystem
-            ) 
-        ) {
-            Ok(v) => v,
-            Err(_) => FNameKey::default(),
+impl Offsets {
+    pub fn get(process: &Process, base_addr: Address, module_size: u64) -> Self {
+        let fnamepool_ptr: Address = match Signature::<11>::new("74 09 48 8D 15 ?? ?? ?? ?? EB 16").scan_process_range(process, (base_addr, module_size)) {
+            Some(v) => v + 5,
+            None => {
+                asr::print_message("Failed to get FNamePool address!!");
+                Address::from(0 as u64)
+            }
+        };
+        let uworld_ptr: Address = match Signature::<16>::new("0F 2E ?? 74 ?? 48 8B 1D ?? ?? ?? ?? 48 85 DB 74").scan_process_range(process, (base_addr, module_size)) {
+            Some(v) => v + 8,
+            None => {
+                asr::print_message("Failed to get UWorld address!!");
+                Address::from(0 as u64)
+            }
+        };
+        let career_ptr: Address = match Signature::<26>::new("75 DF 48 8D 05 ?? ?? ?? ?? 48 89 5C 24 20 33 dB C7 05 ?? ?? ?? ?? FF FF FF FF").scan_process_range(process, (base_addr, module_size)) {
+            Some(v) => v + 18,  // (or add 32 (and add D0 to pointer))
+            None => {
+                asr::print_message("Failed to get career address!!");
+                Address::from(0 as u64)
+            }
+        };
+        let run_state_ptr: Address = match Signature::<15>::new("4C 89 44 24 28 48 89 05 ?? ?? ?? ?? 48 8D 0D").scan_process_range(process, (base_addr, module_size)) {
+            Some(v) => v + 8,
+            None => {
+                asr::print_message("Failed to get run state address!!");
+                Address::from(0 as u64)
+            }
         };
 
-        let name = get_fname_string(process, module, key);
-
-        //asr::print_message(&format!("    {}: {}", i, name));
-
-        if name == "LocalPlayerGoalSystem" {
-            goal_system_idx = Some(i);
-            //asr::print_message("FOUND SKATER SYSTEM");
+        Offsets {
+            fnamepool: match process.read::<i32>(fnamepool_ptr) {
+                Ok(v) => (fnamepool_ptr.value() + 0x4 + v as u64) - base_addr.value(),
+                Err(_) => 0,
+            },
+            uworld: match process.read::<i32>(uworld_ptr) {
+                Ok(v) => (uworld_ptr.value() + 0x4 + v as u64) - base_addr.value(),
+                Err(_) => 0,
+            },
+            career: match process.read::<i32>(career_ptr) {
+                Ok(v) => ((career_ptr.value() + 0x8 + v as u64) - base_addr.value()) + 0xA0,
+                Err(_) => 0,
+            },
+            run_state: match process.read::<i32>(run_state_ptr) {
+                Ok(v) => (run_state_ptr.value() + 0x4 + v as u64) - base_addr.value(),
+                Err(_) => 0,
+            },
         }
     }
 
-    if let Some(idx) = goal_system_idx {
-        match process.read_pointer_path::<Address64>(
-            module.g_world(), 
-            asr::PointerSize::Bit64, 
-            &vec!(
-                0x0 as u64, 
-                0x170 as u64, // GameInstance
-                0x38 as u64, // LocalPlayers
-                0x0 as u64, // Index first array index to get the AlcatrazLocalPlayer instance (maybe make this safer?)
-                0xe8 as u64, // Subsystems I think?
-                (idx * 24) as u64 + 8 as u64, // index into array to get LocalPlayerGoalSystem
-                0x30 as u64, // finally, GoalSystem
-            ) 
-        ) {
-            Ok(v) => Ok(v),
-            Err(e) => Err(e),
-        }
-    } else {
-        Ok(asr::Address64::new(0))
+    fn is_valid(&self) -> bool {
+        self.fnamepool != 0 && self.uworld != 0 && self.career != 0 && self.run_state != 0
     }
 
-    //Ok(asr::Address64::new(0))
+    fn print_offsets(&self) {
+        if self.fnamepool != 0 {
+            asr::print_message(&format!("FNAMEPOOL ADDR: {:#018x}", self.fnamepool));
+        }
+        if self.uworld != 0 {
+            asr::print_message(&format!("UWORLD ADDR: {:#018x}", self.uworld));
+        }
+        if self.career != 0 {
+            asr::print_message(&format!("CAREER ADDR: {:#018x}", self.career));
+        }
+        if self.run_state != 0 {
+            asr::print_message(&format!("RUN STATE ADDR: {:#018x}", self.run_state));
+        }
+    }
 }
 
 struct State {
     level_name: String,
     goal_count: u32,
-    skater: FNameKey,
-    gamemode: u8,
+    skater: u64,
     is_running: bool,
     is_loading: bool,
+}
+
+// Translate an Unreal FName object to its string
+// heavily inspired by the autosplitter for Stray (https://github.com/Micrologist/LiveSplit.Stray/blob/main/stray.asl)
+fn get_fname(process: &Process, base_addr: Address, offsets: &Offsets, id: u64) -> String {
+    if id == 0 {
+        return "".to_string();
+    }
+
+    let key = (id & u32::MAX as u64) as u32;
+    let partial = (id >> 32) as u32;
+    let chunk_offset = key >> 16;
+    let name_offset = key & u16::MAX as u32;
+
+    let name_entry = match process.read_pointer_path::<i16>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.fnamepool as u64 + ((chunk_offset * 0x8) + 0x10) as u64, (name_offset * 0x2) as u64)) {
+        Ok(v) => v,
+        Err(_) => 0,
+    };
+
+    let name_length = name_entry >> 6;
+
+    let mut result_bytes = vec!();
+    for i in 0..name_length {
+        let c = match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.fnamepool as u64 + ((chunk_offset * 0x8) + 0x10) as u64, ((name_offset * 0x2) + 2 + i as u32) as u64)) {
+            Ok(v) => v,
+            Err(_) => 0,
+        };
+        result_bytes.push(c);
+    }
+
+    let result = match std::str::from_utf8(&result_bytes) {
+        Ok(v) => v,
+        Err(_) => "",
+    }.to_string();
+
+    if partial == 0 {
+        return result;
+    } else {
+        return result + "_" + &partial.to_string();
+    }
 }
 
 // THPS1+2 doesn't store its goals like the other games: it stores each goal non-linearly (maybe they expected to add more?)
@@ -113,14 +144,14 @@ struct Career {
 }
 
 impl Career {
-    pub fn new(process: &Process, base_addr: Address, unreal_module: &asr::game_engine::unreal::Module, skater_fname: FNameKey) -> Self {
+    pub fn new(process: &Process, base_addr: Address, offsets: &Offsets, skater_fname: u64) -> Self {
         let goals = vec![vec![false; 10]; 17];
 
         let mut result = Self {
             goals: goals,
         };
 
-        result.update(process, base_addr, unreal_module, skater_fname, 0);
+        result.update(process, base_addr, offsets, skater_fname, 0);
 
         result
     }
@@ -133,19 +164,19 @@ impl Career {
         }
     }
 
-    pub fn update(&mut self, process: &Process, goal_system_addr: Address, unreal_module: &asr::game_engine::unreal::Module, skater_fname: FNameKey, old_count: u32) {
+    pub fn update(&mut self, process: &Process, base_addr: Address, offsets: &Offsets, skater_fname: u64, old_count: u32) {
         // collect all completed goals and apply them to the career goals
         // go through each career until you find the one for the expected skater
-        let career_count = match process.read_pointer_path::<u32>(goal_system_addr, asr::PointerSize::Bit64, &vec!(0xd8 as u64)) {
+        let career_count = match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xd8 as u64)) {
             Ok(v) => v,
             Err(_) => 0,
         };
 
         let mut career_offset = -1;
         for i in 0..career_count {
-            let career_fname = match process.read_pointer_path::<asr::game_engine::unreal::FNameKey>(goal_system_addr, asr::PointerSize::Bit64, &vec!(0xe0 as u64, (i * 0x60) as u64)) {
+            let career_fname = match process.read_pointer_path::<u64>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (i * 0x60) as u64)) {
                 Ok(v) => v,
-                Err(_) => asr::game_engine::unreal::FNameKey::default(),
+                Err(_) => 0,
             };
 
             if career_fname == skater_fname {
@@ -154,49 +185,46 @@ impl Career {
         }
 
         if career_offset != -1 {
-            let goal_count = match process.read_pointer_path::<u32>(goal_system_addr, asr::PointerSize::Bit64, &vec!(0xe0 as u64, (career_offset as u64 * 0x60) + 0x10 as u64)) {
+            let goal_count = match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (career_offset as u64 * 0x60) + 0x10 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             };
 
             for i in old_count..goal_count {
-                let goal_fname = match process.read_pointer_path::<asr::game_engine::unreal::FNameKey>(goal_system_addr, asr::PointerSize::Bit64, &vec!(0xe0 as u64, (career_offset as u64 * 0x60) + 0x8 as u64, (i as u64 * 0x30) + 0x10 as u64)) {
+                let goal_fname = match process.read_pointer_path::<u64>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (career_offset as u64 * 0x60) + 0x8 as u64, (i as u64 * 0x30) + 0x10 as u64)) {
                     Ok(v) => v,
-                    Err(_) => asr::game_engine::unreal::FNameKey::default(),
+                    Err(_) => 0,
                 };
 
-                let goal_name = get_fname_string(process, unreal_module, goal_fname);
+                let (level, idx) = GOAL_TABLE[get_fname(process, base_addr, offsets, goal_fname).as_str()];
 
-                if let Some((level, idx)) = GOAL_TABLE.get(goal_name.as_str()) {
-                    self.goals[*level as usize][*idx as usize] = true;
-                } else {
-                    asr::print_message(&format!("Unrecognized goal completed: {}", goal_name));
-                }
+                self.goals[level as usize][idx as usize] = true;
             }
         }
     }
 }
 
 impl State {
-    pub fn update(process: &Process, goal_system_addr: Address, unreal_module: &asr::game_engine::unreal::Module) -> Self {
-        // name key of skater, we just need to match it to the career, so we don't get the string
-        let skater_fname = match process.read_pointer_path::<FNameKey>(goal_system_addr, asr::PointerSize::Bit64, &vec!(0x130 as u64)) {
+    pub fn update(process: &Process, base_addr: Address, offsets: &Offsets) -> Self {
+        // name ID of skater, but that does not matter, we just need to match it to the career
+        //let skater_fname = match process.read_pointer_path64::<u64>(base_addr, &vec!(0x3d78170 as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0x130 as u64)) {
+        let skater_fname = match process.read_pointer_path::<u64>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0x130 as u64)) {
             Ok(v) => v,
-            Err(_) => FNameKey::default(),
+            Err(_) => 0,
         };
 
         // lol this is very stupid, but I can't find any other way to do it!
         // go through each career until you find the one for the expected skater
-        let career_count = match process.read_pointer_path::<u32>(goal_system_addr, asr::PointerSize::Bit64, &vec!(0xd8 as u64)) {
+        let career_count = match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xd8 as u64)) {
             Ok(v) => v,
             Err(_) => 0,
         };
 
         let mut career_offset = -1;
         for i in 0..career_count {
-            let career_fname = match process.read_pointer_path::<FNameKey>(goal_system_addr, asr::PointerSize::Bit64, &vec!(0xe0 as u64, (i * 0x60) as u64)) {
+            let career_fname = match process.read_pointer_path::<u64>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (i * 0x60) as u64)) {
                 Ok(v) => v,
-                Err(_) => FNameKey::default(),
+                Err(_) => 0,
             };
 
             if career_fname == skater_fname {
@@ -206,46 +234,49 @@ impl State {
 
         let mut goal_count = 0;
         if career_offset != -1 {
-            goal_count = match process.read_pointer_path::<u32>(goal_system_addr, asr::PointerSize::Bit64, &vec!(0xe0 as u64, (career_offset as u64 * 0x60) + 0x10 as u64)) {
+            goal_count = match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.career as u64, 0xe8 as u64, 0x98 as u64, 0x30 as u64, 0xe0 as u64, (career_offset as u64 * 0x60) + 0x10 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             };
         }
 
-        let level_fname = match process.read_pointer_path::<FNameKey>(asr::Address64::new(0), asr::PointerSize::Bit64, &vec!(unreal_module.g_world().value() as u64, 0x18 as u64)) {
-            Ok(v) => v,
-            Err(_) => FNameKey::default(),
-        };
-
-        let gamemode = match process.read_pointer_path::<u8>(asr::Address64::new(0), asr::PointerSize::Bit64, &vec!(unreal_module.g_world().value() as u64, 0x130 as u64, 0x298 as u64)) {
+        let level_fname = match process.read_pointer_path::<u64>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.uworld as u64, 0x18 as u64)) {
             Ok(v) => v,
             Err(_) => 0,
         };
 
-        let is_running = match process.read_pointer_path::<u8>(asr::Address64::new(0), asr::PointerSize::Bit64, &vec!(unreal_module.g_world().value() as u64, 0x130 as u64, 0x29A as u64)) {
-            Ok(v) => {
-                if v & 0x04 == 0 {
-                    // timer has not expired
-                    v & 0x01 != 0
-                } else {
-                    // timer has expired
-                    v & 0x01 == 0
-                }
-            },
-            Err(_) => false,
+        let msg_len = match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.run_state as u64 + 0xD1)) {
+            Ok(v) => v,
+            Err(_) => 0,
         };
 
+        let mut msg_bytes = vec!();
+        for i in 0..msg_len {
+            let c = match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.run_state as u64 + 0xD2 + i as u64)) {
+                Ok(v) => v,
+                Err(_) => 0,
+            };
+            msg_bytes.push(c);
+        }
+
+        let msg = match std::str::from_utf8(&msg_bytes) {
+            Ok(v) => v,
+            Err(_) => "",
+        }.to_string();
+
+        //asr::print_message(&format!("MESSAGE: {} {}", msg_len, msg));
+
         State {
-            level_name: get_fname_string(process, unreal_module, level_fname),
+            level_name: get_fname(process, base_addr, &offsets, level_fname),
 
             goal_count: goal_count,
 
             skater: skater_fname, 
 
-            gamemode,
-            is_running,
+            // check that the last log message was the start message to know if we're running TODO: in the future when verifying AG&G, we'll need to look for match_end
+            is_running: msg == "dlog_event_client_match_start",
 
-            is_loading: match process.read_pointer_path::<u8>(asr::Address64::new(0), asr::PointerSize::Bit64, &vec!(unreal_module.g_world().value() as u64, 0x11B as u64)) {
+            is_loading: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit64, &vec!(offsets.uworld as u64, 0x10B as u64)) {
                 Ok(v) => v & 0x02 == 0,
                 Err(_) => true,
             },
@@ -253,54 +284,58 @@ impl State {
     }
 }
 
+// TODO: figure out NG+, 3-style any% vs all goals logic
+
 pub async fn run(process: &Process, process_name: &str) {
-    asr::print_message("Attached to THPS1+2!");
+    asr::print_message("Attached to THPS3+4!");
     asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
 
     let base_addr = process.get_module_address(process_name).unwrap();
+    let module_size = process.get_module_size(process_name).unwrap();
 
-    let unreal_module;
+    // TODO: loop this until all addresses are found
+    let mut offsets;
+
     loop {
         asr::print_message("Finding offsets...");
-        let offsets_result = asr::game_engine::unreal::Module::attach(process, asr::game_engine::unreal::Version::V4_24, base_addr);
-        if let Some(offsets) = offsets_result {
+        offsets = Offsets::get(process, base_addr, module_size);
+        offsets.print_offsets();
+        if offsets.is_valid() {
             asr::print_message("Offsets found!");
-
-            asr::print_message(&format!("UENGINE ADDR: {:#018x}", offsets.g_engine().value() - base_addr.value()));
-            asr::print_message(&format!("UWORLD ADDR: {:#018x}", offsets.g_world().value() - base_addr.value()));
-
-            unreal_module = offsets;
             break;
-        } 
+        } else {
+            // TODO: REMOVE
+            asr::print_message("Failed to find offsets! continuing...");
+            break;
+        }
         
         asr::print_message("Failed to find offsets! Trying again...");
         asr::future::next_tick().await;
     }
 
-    asr::print_message(&format!("GENGINE: {:#018x}", unreal_module.g_engine().value() - base_addr.value()));
+    let mut prev_state = State::update(process, base_addr, &offsets);
+    let mut career = Career::new(process, base_addr, &offsets, prev_state.skater);
 
-    // this should stay static once it's created, but we need to make sure we get it, and the world may not exist when the game is started (or if we somehow catch a loading screen)
-    let goal_system_addr;
-    loop {
-        if let Ok(addr) = get_goal_system_pointer(process, &unreal_module) {
-            goal_system_addr = asr::Address::new(addr.value());
-            break;
-        }
-
-        asr::print_message("Failed to get GoalSystem! Trying again...");
-        asr::future::next_tick().await;
-    }
-
-    let mut prev_state = State::update(process, goal_system_addr, &unreal_module);
-    let mut career = Career::new(process, goal_system_addr, &unreal_module, prev_state.skater);
-
-    let mut roswell_medal = false;
-    let mut bullring_medal = false;
+    let mut tokyo_medal = false;
+    let mut zoo_medal = false;
     let mut starting_game = false;
 
     loop {
         // update vars
-        let mut current_state = State::update(process, goal_system_addr, &unreal_module);
+        let mut current_state = State::update(process, base_addr, &offsets);
+
+        // dump variables just to see what still works
+        if current_state.is_loading != prev_state.is_loading {
+            asr::print_message(&format!("is_loading changed from {} to {}", prev_state.is_loading, current_state.is_loading));
+        }
+
+        if current_state.is_running != prev_state.is_running {
+            asr::print_message(&format!("is_running changed from {} to {}", prev_state.is_running, current_state.is_running));
+        }
+
+        if current_state.level_name != prev_state.level_name {
+            asr::print_message(&format!("level_name changed from {} to {}", prev_state.level_name, current_state.level_name));
+        }
 
         // if we see an invalid level name, fill in the previous
         if current_state.level_name.is_empty() {
@@ -309,15 +344,15 @@ pub async fn run(process: &Process, process_name: &str) {
 
         // update career
         if current_state.goal_count != prev_state.goal_count {
-            asr::print_message(format!("GOAL COUNT CHANGED TO {}", current_state.goal_count).as_str());
+            //asr::print_message(format!("GOAL COUNT CHANGED TO {}", current_state.goal_count).as_str());
             if current_state.goal_count < prev_state.goal_count || current_state.skater != prev_state.skater {
-                roswell_medal = false;
-                bullring_medal = false;
+                tokyo_medal = false;
+                zoo_medal = false;
                 starting_game = false;
                 career.reset();
-                career.update(process, goal_system_addr, &unreal_module, current_state.skater, 0);
+                career.update(process, base_addr, &offsets, current_state.skater, 0);
             } else {
-                career.update(process, goal_system_addr, &unreal_module, current_state.skater, prev_state.goal_count);
+                career.update(process, base_addr, &offsets, current_state.skater, prev_state.goal_count);
             }
         }
 
@@ -332,7 +367,7 @@ pub async fn run(process: &Process, process_name: &str) {
 
         //asr::print_message(format!("LEVEL = {}", current_state.level_name).as_str());
 
-        if (current_state.level_name == "Warehouse" || current_state.level_name == "Hangar") && prev_state.level_name == "FrontEnd" {
+        if (current_state.level_name == "Foundry" || current_state.level_name == "College") && prev_state.level_name == "FrontEnd" {
             starting_game = true;
             asr::print_message(format!("Starting a game").as_str());
         }
@@ -341,42 +376,41 @@ pub async fn run(process: &Process, process_name: &str) {
             TimerState::NotRunning => {
                 // start when no goals have been completed and starting a first level
                 if starting_game && current_state.goal_count == 0 && current_state.is_running {
-                    if current_state.gamemode == 0x02 {
-                        asr::timer::start();
-                        asr::print_message(format!("Starting timer...").as_str());
-                    }
+                    asr::timer::start();
+                    asr::print_message(format!("Starting timer...").as_str());
                     starting_game = false;
                 }
             },
             TimerState::Paused | TimerState::Running => {
                 // split on level changes (except frontend)
+                // TODO: don't split on final comp to bonus level transition
                 if !starting_game && !current_state.level_name.is_empty() && current_state.level_name != prev_state.level_name && current_state.level_name != "FrontEnd" {
                     asr::timer::split();
                     asr::print_message(format!("Changed level; splitting timer...").as_str());
                 }
 
                 // split when second game is started
-                if ((roswell_medal && current_state.level_name == "Hangar") || (bullring_medal && current_state.level_name == "Warehouse")) && starting_game && current_state.is_running {
-                    if current_state.gamemode == 0x02 {
-                        asr::timer::split();
-                        asr::print_message(format!("Changed level; splitting timer...").as_str());
-                    }
+                if ((tokyo_medal && current_state.level_name == "College") || (zoo_medal && current_state.level_name == "Foundry")) && starting_game && current_state.is_running {
+                    asr::timer::split();
+                    asr::print_message(format!("Changed level; splitting timer...").as_str());
                     starting_game = false;
                 }
 
-                // split when roswell medal is collected
-                if career.goals[8][0] && !roswell_medal {
-                    roswell_medal = true;
+                // split when tokyo medal is collected
+                if career.goals[8][0] && !tokyo_medal {
+                    tokyo_medal = true;
                     asr::timer::split();
-                    asr::print_message(format!("Got Roswell medal; splitting timer...").as_str());
+                    asr::print_message(format!("Got Tokyo medal; splitting timer...").as_str());
                 }
 
-                // split when bullring medal is collected
-                if career.goals[16][0] && !bullring_medal {
-                    bullring_medal = true;
+                // split when zoo medal is collected
+                if career.goals[16][0] && !zoo_medal {
+                    zoo_medal = true;
                     asr::timer::split();
-                    asr::print_message(format!("Got Bullring medal; splitting timer...").as_str());
+                    asr::print_message(format!("Got Zoo medal; splitting timer...").as_str());
                 }
+
+                // TODO: AG&G splits
 
                 // reset when on frontend with 0 pro points
                 if current_state.level_name == "FrontEnd" && current_state.goal_count == 0 {

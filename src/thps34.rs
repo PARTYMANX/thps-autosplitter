@@ -143,7 +143,7 @@ impl Career {
 
         let mut career_offset = -1;
         for i in 0..career_count {
-            let career_fname = match process.read_pointer_path::<asr::game_engine::unreal::FNameKey>(goal_system_addr, asr::PointerSize::Bit64, &vec!(0x98 as u64, (i * 0x60) as u64)) {
+            let career_fname = match process.read_pointer_path::<asr::game_engine::unreal::FNameKey>(goal_system_addr, asr::PointerSize::Bit64, &vec!(0xe8 as u64, (i * 0x60) as u64)) {
                 Ok(v) => v,
                 Err(_) => asr::game_engine::unreal::FNameKey::default(),
             };
@@ -154,13 +154,13 @@ impl Career {
         }
 
         if career_offset != -1 {
-            let goal_count = match process.read_pointer_path::<u32>(goal_system_addr, asr::PointerSize::Bit64, &vec!(0x98 as u64, (career_offset as u64 * 0x60) + 0x10 as u64)) {
+            let goal_count = match process.read_pointer_path::<u32>(goal_system_addr, asr::PointerSize::Bit64, &vec!(0xe8 as u64, (career_offset as u64 * 0x60) + 0x10 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             };
 
             for i in old_count..goal_count {
-                let goal_fname = match process.read_pointer_path::<asr::game_engine::unreal::FNameKey>(goal_system_addr, asr::PointerSize::Bit64, &vec!(0x98 as u64, (career_offset as u64 * 0x60) + 0x8 as u64, (i as u64 * 0x30) + 0x10 as u64)) {
+                let goal_fname = match process.read_pointer_path::<asr::game_engine::unreal::FNameKey>(goal_system_addr, asr::PointerSize::Bit64, &vec!(0xe8 as u64, (career_offset as u64 * 0x60) + 0x8 as u64, (i as u64 * 0x30) + 0x10 as u64)) {
                     Ok(v) => v,
                     Err(_) => asr::game_engine::unreal::FNameKey::default(),
                 };
@@ -318,7 +318,7 @@ pub async fn run(process: &Process, process_name: &str) {
 
     asr::print_message(&format!("GENGINE: {:#018x}", unreal_module.g_engine().value() - base_addr.value()));
 
-    // this should stay static once it's created, but we need to make sure we get it, and the world may not exist when the game is started (or if we somehow catch a loading screen)
+    // this should stay static once it's created but we need to make sure we get it, because the world may not exist when the game is started (or if we somehow catch a loading screen)
     let goal_system_addr;
     loop {
         if let Ok(addr) = get_goal_system_pointer(process, &unreal_module) {
@@ -335,8 +335,8 @@ pub async fn run(process: &Process, process_name: &str) {
     let mut prev_state = State::update(process, goal_system_addr, &unreal_module);
     let mut career = Career::new(process, goal_system_addr, &unreal_module, prev_state.skater);
 
-    let mut roswell_medal = false;
-    let mut bullring_medal = false;
+    let mut tokyo_medal = false;
+    let mut zoo_medal = false;
     let mut starting_game = false;
 
     loop {
@@ -352,8 +352,8 @@ pub async fn run(process: &Process, process_name: &str) {
         if current_state.goal_count != prev_state.goal_count {
             asr::print_message(format!("GOAL COUNT CHANGED TO {}", current_state.goal_count).as_str());
             if current_state.goal_count < prev_state.goal_count || current_state.skater != prev_state.skater {
-                roswell_medal = false;
-                bullring_medal = false;
+                tokyo_medal = false;
+                zoo_medal = false;
                 starting_game = false;
                 career.reset();
                 career.update(process, goal_system_addr, &unreal_module, current_state.skater, 0);
@@ -381,7 +381,7 @@ pub async fn run(process: &Process, process_name: &str) {
 
         //asr::print_message(format!("LEVEL = {}", current_state.level_name).as_str());
 
-        if (current_state.level_name == "Warehouse" || current_state.level_name == "Hangar") && prev_state.level_name == "FrontEnd" {
+        if (current_state.level_name == "Foundry" || current_state.level_name == "College") && prev_state.level_name == "FrontEnd" {
             starting_game = true;
             asr::print_message(format!("Starting a game").as_str());
         }
@@ -405,7 +405,7 @@ pub async fn run(process: &Process, process_name: &str) {
                 }
 
                 // split when second game is started
-                if ((roswell_medal && current_state.level_name == "Hangar") || (bullring_medal && current_state.level_name == "Warehouse")) && starting_game && current_state.is_running {
+                if ((tokyo_medal && current_state.level_name == "College") || (zoo_medal && current_state.level_name == "Foundry")) && starting_game && current_state.is_running {
                     if current_state.gamemode == 0x02 {
                         asr::timer::split();
                         asr::print_message(format!("Changed level; splitting timer...").as_str());
@@ -414,17 +414,17 @@ pub async fn run(process: &Process, process_name: &str) {
                 }
 
                 // split when roswell medal is collected
-                if career.goals[8][0] && !roswell_medal {
-                    roswell_medal = true;
+                if career.goals[8][0] && !tokyo_medal {
+                    tokyo_medal = true;
                     asr::timer::split();
-                    asr::print_message(format!("Got Roswell medal; splitting timer...").as_str());
+                    asr::print_message(format!("Got Tokyo medal; splitting timer...").as_str());
                 }
 
                 // split when bullring medal is collected
-                if career.goals[16][0] && !bullring_medal {
-                    bullring_medal = true;
+                if career.goals[16][0] && !zoo_medal {
+                    zoo_medal = true;
                     asr::timer::split();
-                    asr::print_message(format!("Got Bullring medal; splitting timer...").as_str());
+                    asr::print_message(format!("Got Zoo medal; splitting timer...").as_str());
                 }
 
                 // reset when on frontend with 0 pro points
@@ -444,7 +444,7 @@ pub async fn run(process: &Process, process_name: &str) {
     }
 }
 
-pub fn detect_bootstrap(process: &Process, process_name: &str) -> bool {
+/*pub fn detect_bootstrap(process: &Process, process_name: &str) -> bool {
     let size = match process.get_module_size(process_name) {
         Ok(v) => v,
         Err(_) => 0,
@@ -456,7 +456,7 @@ pub fn detect_bootstrap(process: &Process, process_name: &str) -> bool {
     } else {
         return false;
     }
-}
+}*/
 
 // constructs a hash table of every goal in the game to translate from a name to a position in our own career table
 static GOAL_TABLE: Lazy<HashMap<&str, (u32, u32)>> = Lazy::new(|| {
@@ -471,7 +471,8 @@ static GOAL_TABLE: Lazy<HashMap<&str, (u32, u32)>> = Lazy::new(|| {
 
 // list of all goals, in the format (name, (level, index))
 const GOAL_LIST: [(&str, (u32, u32)); 0] = [
-    /*("/Game/Environments/THPS1/Warehouse/Goals/Data/warehouse_score_high.warehouse_score_high", (0, 0)),
+    /*
+    ("/Game/Environments/THPS1/Warehouse/Goals/Data/warehouse_score_high.warehouse_score_high", (0, 0)),
     ("/Game/Environments/THPS1/Warehouse/Goals/Data/warehouse_score_pro.warehouse_score_pro", (0, 1)),
     ("/Game/Environments/THPS1/Warehouse/Goals/Data/warehouse_score_sick.warehouse_score_sick", (0, 2)),
     ("/Game/Environments/THPS1/Warehouse/Goals/Data/warehouse_score_combo.warehouse_score_combo", (0, 3)),
@@ -614,5 +615,6 @@ const GOAL_LIST: [(&str, (u32, u32)); 0] = [
 
     ("/Game/Environments/THPS2/Bullring/Goals/Data/bullring_medal_bronze.bullring_medal_bronze", (16, 0)),
     ("/Game/Environments/THPS2/Bullring/Goals/Data/bullring_medal_silver.bullring_medal_silver", (16, 1)),
-    ("/Game/Environments/THPS2/Bullring/Goals/Data/bullring_medal_gold.bullring_medal_gold", (16, 2)),*/
+    ("/Game/Environments/THPS2/Bullring/Goals/Data/bullring_medal_gold.bullring_medal_gold", (16, 2)),
+    */
 ];

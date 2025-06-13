@@ -233,7 +233,7 @@ impl State {
 
         let mut career_offset = -1;
         for i in 0..career_count {
-            let career_fname = match process.read_pointer_path::<FNameKey>(goal_system_addr, asr::PointerSize::Bit64, &vec!(0x98 as u64, (i * 0x60) as u64)) {
+            let career_fname = match process.read_pointer_path::<FNameKey>(goal_system_addr, asr::PointerSize::Bit64, &vec!(0xe8 as u64, (i * 0x60) as u64)) {
                 Ok(v) => v,
                 Err(_) => FNameKey::default(),
             };
@@ -245,7 +245,7 @@ impl State {
 
         let mut goal_count = 0;
         if career_offset != -1 {
-            goal_count = match process.read_pointer_path::<u32>(goal_system_addr, asr::PointerSize::Bit64, &vec!(0x98 as u64, (career_offset as u64 * 0x60) + 0x10 as u64)) {
+            goal_count = match process.read_pointer_path::<u32>(goal_system_addr, asr::PointerSize::Bit64, &vec!(0xe8 as u64, (career_offset as u64 * 0x60) + 0x10 as u64)) {
                 Ok(v) => v,
                 Err(_) => 0,
             };

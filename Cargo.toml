@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-asr = { git = "https://github.com/PARTYMANX/asr", branch = "master", features = ["alloc", "signature", "unreal"] }
+asr = { git = "https://github.com/PARTYMANX/asr", branch = "uobject-work", features = ["alloc", "signature", "unreal"] }
 once_cell = "1.18.0"
 
 [lib]

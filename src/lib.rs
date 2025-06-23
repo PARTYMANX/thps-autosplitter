@@ -10,6 +10,8 @@ mod thps12;
 mod thps34;
 mod mhpb;
 
+mod alcatraz_utils;
+
 asr::async_main!(stable);
 
 async fn main() {

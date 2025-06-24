@@ -287,21 +287,24 @@ impl Offsets {
     }
 }
 
-// THPS3+4 doesn't store its goals like the other games: it stores each goal non-linearly (maybe they expected to add more?)
+// THPS1+2/3+4 doesn't store its goals like the other games: it stores each goal non-linearly (maybe they expected to add more?)
 // so we need to construct our own career struct to make it more convenient to both count goals (when AG&G criteria is added) and keep track of medals more easily
 pub struct CareerState {
     goals: Vec<Vec<Vec<bool>>>,
     goal_count: u32,
+    tours: Vec<TourState>,
     skater: asr_unreal::FNameKey,
 }
 
 impl CareerState {
     fn new(process: &asr::Process, context: &AlcatrazContext) -> Self {
         let goals = vec![vec![vec![false; 15]; 10]; 4];
+        let tours = vec![TourState::default(); 4];
 
         let mut result = Self {
-            goals: goals,
+            goals,
             goal_count: 0,
+            tours, 
             skater: asr_unreal::FNameKey::default()
         };
 
@@ -310,12 +313,15 @@ impl CareerState {
         result
     }
 
-    pub fn reset(&mut self) {
+    fn reset(&mut self) {
         for tour in &mut self.goals {
             for level in tour {
                 level.fill(false);
             }
         }
+
+        self.tours.fill(TourState::default());
+
         self.goal_count = 0;
     }
 
@@ -351,6 +357,10 @@ impl CareerState {
                 Err(_) => 0,
             };
 
+            if goal_count < self.goal_count {
+                self.reset();
+            }
+
             for i in self.goal_count..goal_count {
                 let goal_fname = match process.read_pointer_path::<asr::game_engine::unreal::FNameKey>(context.offsets.goal_system.get_address(), asr::PointerSize::Bit64, &vec!(context.offsets.careers, (career_offset as u64 * 0x60) + 0x8 as u64, (i as u64 * 0x30) + 0x10 as u64)) {
                     Ok(v) => v,
@@ -359,8 +369,24 @@ impl CareerState {
 
                 let goal_name = get_fname_string(process, &context.unreal_module, goal_fname);
 
-                if let Some((tour, level, idx)) = GOAL_TABLE.get(goal_name.as_str()) {
+                if let Some((tour, level, idx, ty)) = GOAL_TABLE.get(goal_name.as_str()) {
                     self.goals[*tour as usize][*level as usize][*idx as usize] = true;
+
+                    match ty {
+                        goal_table::GoalType::Normal => {
+                            self.tours[*tour as usize].goals += 1;
+                        },
+                        goal_table::GoalType::Medal => {
+                            self.tours[*tour as usize].medals += 1;
+                        },
+                        goal_table::GoalType::GoldMedal => {
+                            self.tours[*tour as usize].medals += 1;
+                            self.tours[*tour as usize].gold_medals += 1;
+                        },
+                        goal_table::GoalType::Pro => {
+                            self.tours[*tour as usize].pro_goals += 1;
+                        },
+                    }
                 } else {
                     asr::print_message(&format!("Unrecognized goal completed: {}", goal_name));
                 }
@@ -377,4 +403,16 @@ impl CareerState {
     pub fn get_goal_count(&self) -> u32 {
         self.goal_count
     }
+
+    pub fn get_tour_state(&self, tour: u32) -> &TourState {
+        &self.tours[tour as usize]
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct TourState {
+    pub goals: u32,
+    pub pro_goals: u32,
+    pub medals: u32,
+    pub gold_medals: u32,
 }

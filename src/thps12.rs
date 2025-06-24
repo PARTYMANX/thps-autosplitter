@@ -1,6 +1,6 @@
 use asr::{timer::TimerState, Process};
 
-use crate::alcatraz_utils::{self, CareerState};
+use crate::alcatraz_utils;
 
 struct State {
     level_name: String,
@@ -13,7 +13,7 @@ struct State {
 }
 
 impl State {
-    pub fn update(process: &Process, context: &alcatraz_utils::AlcatrazContext, career: &mut CareerState) -> Self {
+    pub fn update(process: &Process, context: &alcatraz_utils::AlcatrazContext, career: &mut alcatraz_utils::CareerState) -> Self {
         career.update(process, context);
 
         Self {

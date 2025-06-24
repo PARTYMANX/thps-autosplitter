@@ -217,7 +217,7 @@ impl Offsets {
             Err(_) => return None,
         };
 
-        let local_player = asr::game_engine::unreal::UObject::new(local_player_addr);
+        let local_player = asr_unreal::UObject::new(local_player_addr);
         //local_player.list_fields(process, module);
 
         // find LocalPlayerGoalSystem
@@ -341,9 +341,9 @@ impl CareerState {
 
         let mut career_offset = -1;
         for i in 0..career_count {
-            let career_fname = match process.read_pointer_path::<asr::game_engine::unreal::FNameKey>(context.offsets.goal_system.get_address(), asr::PointerSize::Bit64, &vec![context.offsets.careers, (i * 0x60) as u64]) {
+            let career_fname = match process.read_pointer_path::<asr_unreal::FNameKey>(context.offsets.goal_system.get_address(), asr::PointerSize::Bit64, &vec![context.offsets.careers, (i * 0x60) as u64]) {
                 Ok(v) => v,
-                Err(_) => asr::game_engine::unreal::FNameKey::default(),
+                Err(_) => asr_unreal::FNameKey::default(),
             };
 
             if career_fname == skater_fname {
@@ -362,9 +362,9 @@ impl CareerState {
             }
 
             for i in self.goal_count..goal_count {
-                let goal_fname = match process.read_pointer_path::<asr::game_engine::unreal::FNameKey>(context.offsets.goal_system.get_address(), asr::PointerSize::Bit64, &vec!(context.offsets.careers, (career_offset as u64 * 0x60) + 0x8 as u64, (i as u64 * 0x30) + 0x10 as u64)) {
+                let goal_fname = match process.read_pointer_path::<asr_unreal::FNameKey>(context.offsets.goal_system.get_address(), asr::PointerSize::Bit64, &vec!(context.offsets.careers, (career_offset as u64 * 0x60) + 0x8 as u64, (i as u64 * 0x30) + 0x10 as u64)) {
                     Ok(v) => v,
-                    Err(_) => asr::game_engine::unreal::FNameKey::default(),
+                    Err(_) => asr_unreal::FNameKey::default(),
                 };
 
                 let goal_name = get_fname_string(process, &context.unreal_module, goal_fname);

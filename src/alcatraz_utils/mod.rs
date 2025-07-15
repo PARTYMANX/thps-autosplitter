@@ -164,13 +164,13 @@ impl Offsets {
         };
 
         let career_count = match game {
-            Game::THPS12 => 0xf0,   
-            Game::THPS34 => 0x100,   // i'd previously written a0 here, but I have a feeling that was wrong and it really should be e8
+            Game::THPS12 => 0xe8,   
+            Game::THPS34 => 0xf0,   // i'd previously written a0 here, but I have a feeling that was wrong and it really should be e8
         };
 
         let careers = match game {
             Game::THPS12 => 0xe0,
-            Game::THPS34 => 0xf0,   // i'd previously written e8 here, but I have a feeling that was wrong and it really should be f0
+            Game::THPS34 => 0xe8,   // i'd previously written e8 here, but I have a feeling that was wrong and it really should be f0
         };
 
         Some(Self {
@@ -329,7 +329,11 @@ impl CareerState {
         let skater_fname = context.get_skater_fname(process);
 
         if skater_fname != self.skater {
+            asr::print_message(&format!("Skater changed, resetting goals"));
+
             self.reset();
+
+            self.skater = skater_fname;
         }
 
         // collect all completed goals and apply them to the career goals
@@ -358,7 +362,12 @@ impl CareerState {
             };
 
             if goal_count < self.goal_count {
+                asr::print_message(&format!("Goal count lower than previous, resetting goals"));
                 self.reset();
+            }
+
+            if self.goal_count != goal_count {
+                asr::print_message(&format!("Updating goals: {} to {}", self.goal_count, goal_count));
             }
 
             for i in self.goal_count..goal_count {
@@ -370,22 +379,24 @@ impl CareerState {
                 let goal_name = get_fname_string(process, &context.unreal_module, goal_fname);
 
                 if let Some((tour, level, idx, ty)) = GOAL_TABLE.get(goal_name.as_str()) {
-                    self.goals[*tour as usize][*level as usize][*idx as usize] = true;
+                    if !self.goals[*tour as usize][*level as usize][*idx as usize] {
+                        self.goals[*tour as usize][*level as usize][*idx as usize] = true;
 
-                    match ty {
-                        goal_table::GoalType::Normal => {
-                            self.tours[*tour as usize].goals += 1;
-                        },
-                        goal_table::GoalType::Medal => {
-                            self.tours[*tour as usize].medals += 1;
-                        },
-                        goal_table::GoalType::GoldMedal => {
-                            self.tours[*tour as usize].medals += 1;
-                            self.tours[*tour as usize].gold_medals += 1;
-                        },
-                        goal_table::GoalType::Pro => {
-                            self.tours[*tour as usize].pro_goals += 1;
-                        },
+                        match ty {
+                            goal_table::GoalType::Normal => {
+                                self.tours[*tour as usize].goals += 1;
+                            },
+                            goal_table::GoalType::Medal => {
+                                self.tours[*tour as usize].medals += 1;
+                            },
+                            goal_table::GoalType::GoldMedal => {
+                                self.tours[*tour as usize].medals += 1;
+                                self.tours[*tour as usize].gold_medals += 1;
+                            },
+                            goal_table::GoalType::Pro => {
+                                self.tours[*tour as usize].pro_goals += 1;
+                            },
+                        }
                     }
                 } else {
                     asr::print_message(&format!("Unrecognized goal completed: {}", goal_name));

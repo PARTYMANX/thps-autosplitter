@@ -21,6 +21,8 @@ impl State {
         let thps3state = career.get_tour_state(2);
         let thps4state = career.get_tour_state(3);
 
+        //asr::print_message(format!("3 GOALS: {}, 3 GOLDS: {}, 4 GOALS: {}, 4 GOLDS: {}", thps3state.goals, thps3state.gold_medals, thps4state.goals, thps4state.gold_medals).as_str());
+
         Self {
             level_name: context.get_level_name(process),
             goal_count: career.get_goal_count(),
@@ -77,7 +79,7 @@ pub async fn run(process: &Process, process_name: &str) {
 
         // update career
         if current_state.goal_count != prev_state.goal_count {
-            asr::print_message(format!("GOAL COUNT CHANGED TO {}", current_state.goal_count).as_str());
+            //asr::print_message(format!("GOAL COUNT CHANGED TO {}", current_state.goal_count).as_str());
             if current_state.goal_count < prev_state.goal_count {
                 starting_game = false;
             }
@@ -90,10 +92,6 @@ pub async fn run(process: &Process, process_name: &str) {
         } else if !current_state.is_loading && prev_state.is_loading {
             asr::timer::resume_game_time();
             asr::print_message(format!("Done Loading").as_str());
-        }
-
-        if current_state.is_running != prev_state.is_running {
-            asr::print_message(&format!("is_running changed from {} to {}", prev_state.is_running, current_state.is_running));
         }
 
         //asr::print_message(format!("LEVEL = {}", current_state.level_name).as_str());
@@ -143,6 +141,7 @@ pub async fn run(process: &Process, process_name: &str) {
                     starting_game = false;
                 }
 
+                /*
                 // split when tokyo medal is collected
                 if current_state.tokyo_medal && !prev_state.tokyo_medal {
                     asr::timer::split();
@@ -156,6 +155,7 @@ pub async fn run(process: &Process, process_name: &str) {
                     asr::print_message(format!("Got Zoo medal; splitting timer...").as_str());
                     ignore_next_level = true;
                 }
+                */
 
                 // split when all thps3 goals and golds are complete
                 if current_state.thps3_agag && !prev_state.thps3_agag {
@@ -163,18 +163,19 @@ pub async fn run(process: &Process, process_name: &str) {
                     asr::print_message(format!("THPS3 all goals and golds complete; ready to split...").as_str());
                 }
 
-                if !current_state.is_running && prev_state.is_running && thps3_complete {
+                if !current_state.is_running && thps3_complete {
                     asr::timer::split();
                     asr::print_message(format!("THPS3 all goals and golds; splitting timer...").as_str());
                     thps3_complete = false;
                 }
 
+                // split when all thps4 goals and golds are complete
                 if current_state.thps4_agag && !prev_state.thps4_agag {
                     thps4_complete = true;
                     asr::print_message(format!("THPS4 all goals and golds complete; ready to split...").as_str());
                 }
 
-                if !current_state.is_running && prev_state.is_running && thps4_complete {
+                if !current_state.is_running && thps4_complete {
                     asr::timer::split();
                     asr::print_message(format!("THPS4 all goals and golds; splitting timer...").as_str());
                     thps4_complete = false;

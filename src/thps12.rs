@@ -65,11 +65,6 @@ pub async fn run(process: &Process, process_name: &str) {
             current_state.level_name = prev_state.level_name.clone();
         }
 
-        // update career
-        if current_state.goal_count != prev_state.goal_count {
-            asr::print_message(format!("GOAL COUNT CHANGED TO {}", current_state.goal_count).as_str());
-        }
-
         // pause game time when loading, resume when done
         if current_state.is_loading && !prev_state.is_loading {
             asr::timer::pause_game_time();
@@ -77,18 +72,6 @@ pub async fn run(process: &Process, process_name: &str) {
         } else if !current_state.is_loading && prev_state.is_loading {
             asr::timer::resume_game_time();
             asr::print_message(format!("Done Loading").as_str());
-        }
-
-        if current_state.is_running != prev_state.is_running {
-            asr::print_message(&format!("is_running changed from {} to {}", prev_state.is_running, current_state.is_running));
-        }
-
-        if current_state.gamemode != prev_state.gamemode {
-            asr::print_message(&format!("gamemode changed from {} to {}", prev_state.gamemode, current_state.gamemode));
-        }
-
-        if current_state.level_name != prev_state.level_name {
-            asr::print_message(&format!("level changed from {} to {}", prev_state.level_name, current_state.level_name));
         }
 
         if (current_state.level_name == "Warehouse" || current_state.level_name == "Hangar") && prev_state.level_name == "FrontEnd" {

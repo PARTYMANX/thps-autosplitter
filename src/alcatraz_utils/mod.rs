@@ -366,9 +366,7 @@ impl CareerState {
                 self.reset();
             }
 
-            if self.goal_count != goal_count {
-                asr::print_message(&format!("Updating goals: {} to {}", self.goal_count, goal_count));
-            }
+            let mut has_invalid_goal = false;
 
             for i in self.goal_count..goal_count {
                 let goal_fname = match process.read_pointer_path::<asr_unreal::FNameKey>(context.offsets.goal_system.get_address(), asr::PointerSize::Bit64, &vec!(context.offsets.careers, (career_offset as u64 * 0x60) + 0x8 as u64, (i as u64 * 0x30) + 0x10 as u64)) {
@@ -397,6 +395,12 @@ impl CareerState {
                                 self.tours[*tour as usize].pro_goals += 1;
                             },
                         }
+                        //asr::print_message(&format!("Goal completed: {}", goal_name));
+                    } else {
+                        //asr::print_message(&format!("DUPLICATE GOAL COMPLETED: {}", goal_name));
+                        // bizarre bug: when a SKATE goal is completed in 3+4, it expands the goal array by two then the second entry is replaced with the next goal completed
+                        // if we see a duplicate, that means that means we see an invalid goal and should not process it
+                        has_invalid_goal = true;
                     }
                 } else {
                     asr::print_message(&format!("Unrecognized goal completed: {}", goal_name));
@@ -404,6 +408,13 @@ impl CareerState {
             }
 
             self.goal_count = goal_count;
+
+            if has_invalid_goal {
+                self.goal_count -= 1;
+            }
+        } else {
+            // career not found.  reset goals
+            self.reset();
         }
     }
 

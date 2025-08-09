@@ -1,6 +1,6 @@
 // utilities for the unreal 4 THPS games (1+2, 3+4)
 
-use asr::game_engine::unreal as asr_unreal;
+use asr::{game_engine::unreal as asr_unreal};
 use goal_table::GOAL_TABLE;
 
 mod goal_table;
@@ -20,7 +20,11 @@ impl AlcatrazContext {
 
         let unreal_module = match asr_unreal::Module::attach(process, unreal_version, main_module_address) {
             Some(v) => v,
-            None => return None,
+            None => {
+                asr::print_message(&format!("Failed to attach to unreal!"));
+
+                return None
+            },
         };
 
         let offsets = Offsets::new(process, &unreal_module, game)?;
@@ -412,6 +416,21 @@ impl CareerState {
             if has_invalid_goal {
                 self.goal_count -= 1;
             }
+
+            for (i, tour) in self.goals.iter().enumerate() {
+                let mut levels_with_goals = 0;
+
+                for level in tour {
+                    for goal in level {
+                        if *goal {
+                            levels_with_goals += 1;
+                            break;
+                        }
+                    }
+                }
+
+                self.tours[i].levels_with_goals = levels_with_goals;
+            }
         } else {
             // career not found.  reset goals
             self.reset();
@@ -437,4 +456,5 @@ pub struct TourState {
     pub pro_goals: u32,
     pub medals: u32,
     pub gold_medals: u32,
+    pub levels_with_goals: u32,
 }

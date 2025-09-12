@@ -19,7 +19,8 @@ use asr::{Address, Process, timer::TimerState, time::Duration};
 
 struct State {
     is_timer_running: bool,
-    timer_vblanks: u32,
+    timer_end: u32,
+    seconds_elapsed: u32,
     level_id: u8,
     mode: u8,
     screen: u8,
@@ -31,12 +32,12 @@ struct State {
 impl State {
     pub fn check_for_reset(process: &Process, base_addr: Address) -> bool {
         for i in 0..15 {
-            let goal_count = match process.read::<u8>(base_addr + 0x1656cc + (i * 0x104) as u32) {
+            let cash = match process.read::<u8>(base_addr + 0x1656cc + (i * 0x104) + 4 as u32) {
                 Ok(v) => v,
                 Err(_) => 0,
             };
 
-            if goal_count > 0 {
+            if cash > 0 {
                 return false;
             }
         }
@@ -92,13 +93,15 @@ impl State {
             };
         }
 
-        State {
-            is_timer_running: match process.read::<bool>(base_addr + 0x16B238 as u32) {
-                Ok(v) => v,
-                Err(_) => false,
-            },
+        let is_timer_running = match process.read::<bool>(base_addr + 0x16B238 as u32) {
+            Ok(v) => v,
+            Err(_) => false,
+        };
 
-            level_id: match process.read::<u8>(base_addr + 0x15e8f0 as u32) {
+        State {
+            is_timer_running,
+
+            level_id: match process.read::<u8>(base_addr + 0x1674f8 as u32) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
@@ -114,27 +117,42 @@ impl State {
             },
 
             // used for igt only, so clamp it to max run time
-            timer_vblanks: match process.read::<u32>(base_addr + 0x16af80 as u32) {
-                Ok(v) => {
-                    // possibly CBruce + 2cc0 is time left??
-                    let level_id = match process.read::<u32>(base_addr + 0x15e8f0 as u32) {
-                        Ok(v) => v.clamp(0, 13),
-                        Err(_) => 0,
-                    };
+            seconds_elapsed: match process.read::<u32>(base_addr + 0x16af80 as u32) {
+                Ok(vblanks) => {
+                    if is_timer_running {
+                        let time_end = match process.read_pointer_path::<i32>(base_addr, asr::PointerSize::Bit32, &vec!(0x1674b8 as u64, 0x2cc8 as u64)) {
+                            Ok(v) => v,
+                            Err(_) => 0,
+                        };
 
-                    let is_comp = match process.read::<bool>(base_addr + 0x139040 + (level_id * 0x1ac) as u32) {
-                        Ok(v) => v,
-                        Err(_) => false,
-                    };
-    
-                    let max_time = if is_comp {
-                        1 * 60 * 60 // 1 minutes * 60 seconds * 60 vblanks/sec
+                        let time_left = ((time_end as i32 - vblanks as i32) / 60).max(0) as u32;
+
+                        let level_id = match process.read::<u32>(base_addr + 0x15e8f0 as u32) {
+                            Ok(v) => v.clamp(0, 13),
+                            Err(_) => 0,
+                        };
+
+                        let is_comp = match process.read::<bool>(base_addr + 0x139040 + (level_id * 0x1ac) as u32) {
+                            Ok(v) => v,
+                            Err(_) => false,
+                        };
+        
+                        let max_time = if is_comp {
+                            1 * 60 // 1 minutes * 60 seconds
+                        } else {
+                            2 * 60 // 2 minutes * 60 seconds
+                        };
+
+                        max_time - time_left
                     } else {
-                        2 * 60 * 60 // 2 minutes * 60 seconds * 60 vblanks/sec
-                    };
-
-                    (v + 30).clamp(0, max_time)   // timer sticks at 2:00 for half a second, add 30 vblanks to account for this
+                        0
+                    }
                 },
+                Err(_) => 0,
+            },
+
+            timer_end: match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(0x1674b8 as u64, 0x2cc8 as u64)) {
+                Ok(v) => v,
                 Err(_) => 0,
             },
 
@@ -160,7 +178,14 @@ pub async fn run(process: &Process, process_name: &str) {
 
     loop {
         // update vars
-        let current_state = State::update(process, base_addr);
+        let mut current_state = State::update(process, base_addr);
+
+        // if the end of time is changing, don't count any seconds yet, we're in a comp intro (also if the end is in 1 minute we know that's not right and we're starting the comp intro)
+        let is_timer_unstable = current_state.timer_end != prev_state.timer_end || current_state.timer_end == 3630;    
+
+        if is_timer_unstable {
+            current_state.seconds_elapsed = prev_state.seconds_elapsed;
+        }
 
         match asr::timer::state() {
             TimerState::NotRunning => {
@@ -203,16 +228,18 @@ pub async fn run(process: &Process, process_name: &str) {
 
                     prev_igt = Duration::seconds(-1);
                     asr::timer::resume_game_time();
+
+                    igt_accumulator = 0;    // so igt doesn't stick around
                 }
 
                 // calculate igt
                 // commit run's time when either the timer has stopped (run ended) or current time is lower than previous while timer is running
-                if (!current_state.is_timer_running && prev_state.is_timer_running) || (current_state.timer_vblanks < prev_state.timer_vblanks && prev_state.is_timer_running) {
-                    igt_accumulator += prev_state.timer_vblanks as i64 / 60;
+                if (!current_state.is_timer_running && prev_state.is_timer_running) || (current_state.seconds_elapsed < prev_state.seconds_elapsed && prev_state.is_timer_running) {
+                    igt_accumulator += prev_state.seconds_elapsed as i64;
                 }
 
                 let igt_duration = if current_state.is_timer_running {
-                    Duration::seconds(igt_accumulator + (current_state.timer_vblanks as i64 / 60))
+                    Duration::seconds(igt_accumulator + (current_state.seconds_elapsed as i64))
                 } else {
                     Duration::seconds(igt_accumulator)
                 };

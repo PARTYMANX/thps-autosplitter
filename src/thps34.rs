@@ -95,8 +95,7 @@ pub async fn run(process: &Process, process_name: &str) {
 
     let mut starting_game = false;
     let mut ignore_next_level = false;
-    let mut thps3_complete = false;
-    let mut thps4_complete = false;
+    let mut pending_stars = 0;
 
     loop {
         // update vars
@@ -143,8 +142,7 @@ pub async fn run(process: &Process, process_name: &str) {
                         asr::print_message(format!("Starting timer...").as_str());
                     }
                     starting_game = false;
-                    thps3_complete = false;
-                    thps4_complete = false;
+                    pending_stars = 0;
                     ignore_next_level = false;
                 }
             },
@@ -171,26 +169,32 @@ pub async fn run(process: &Process, process_name: &str) {
 
                 // split when all thps3 goals and golds are complete
                 if current_state.thps3_stars > prev_state.thps3_stars {
-                    thps3_complete = true;
+                    pending_stars += current_state.thps3_stars - prev_state.thps3_stars;
                     asr::print_message(format!("THPS3 {} star; ready to split...", current_state.thps3_stars).as_str());
                 }
 
-                if !current_state.is_running && thps3_complete {
-                    asr::timer::split();
-                    asr::print_message(format!("THPS3 {} star; splitting timer...", current_state.thps3_stars).as_str());
-                    thps3_complete = false;
+                if !current_state.is_running && pending_stars > 0 {
+                    for _ in 0..pending_stars {
+                        asr::timer::split();
+                        asr::print_message(format!("THPS3 star; splitting timer...").as_str());
+                    }
+                    
+                    pending_stars = 0;
                 }
 
                 // split when all thps4 goals and golds are complete
                 if current_state.thps4_stars > prev_state.thps4_stars {
-                    thps4_complete = true;
-                    asr::print_message(format!("THPS4 {} star; ready to split...", current_state.thps4_stars).as_str());
+                    pending_stars += current_state.thps4_stars - prev_state.thps4_stars;
+                    asr::print_message(format!("THPS4 {} star; ready to split...", current_state.thps3_stars).as_str());
                 }
 
-                if !current_state.is_running && thps4_complete {
-                    asr::timer::split();
-                    asr::print_message(format!("THPS4 {} star; splitting timer...", current_state.thps4_stars).as_str());
-                    thps4_complete = false;
+                if !current_state.is_running && pending_stars > 0 {
+                    for _ in 0..pending_stars {
+                        asr::timer::split();
+                        asr::print_message(format!("THPS4 star; splitting timer...").as_str());
+                    }
+                    
+                    pending_stars = 0;
                 }
 
                 // reset when on frontend with 0 pro points
@@ -198,8 +202,7 @@ pub async fn run(process: &Process, process_name: &str) {
                     asr::timer::reset();
                     asr::print_message(format!("Resetting timer...").as_str());
 
-                    thps3_complete = false;
-                    thps4_complete = false;
+                    pending_stars = 0;
                     ignore_next_level = false;
                 }
             },

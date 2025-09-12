@@ -84,10 +84,10 @@ impl AlcatrazContext {
         }
     }
 
-    fn get_skater_fname(&self, process: &asr::Process) -> asr_unreal::FNameKey {
+    fn get_skater_fname(&self, process: &asr::Process) -> Option<asr_unreal::FNameKey> {
         match process.read_pointer_path::<asr_unreal::FNameKey>(self.offsets.goal_system.get_address(), asr::PointerSize::Bit64, &vec!(self.offsets.skater_name)) {
-            Ok(v) => v,
-            Err(_) => asr_unreal::FNameKey::default(),
+            Ok(v) => Some(v),
+            Err(_) => None,
         }
     }
 
@@ -297,7 +297,7 @@ pub struct CareerState {
     goals: Vec<Vec<Vec<bool>>>,
     goal_count: u32,
     tours: Vec<TourState>,
-    skater: asr_unreal::FNameKey,
+    skater: Option<asr_unreal::FNameKey>,
 }
 
 impl CareerState {
@@ -309,7 +309,7 @@ impl CareerState {
             goals,
             goal_count: 0,
             tours, 
-            skater: asr_unreal::FNameKey::default()
+            skater: None
         };
 
         result.update(process, context);
@@ -350,8 +350,8 @@ impl CareerState {
         let mut career_offset = -1;
         for i in 0..career_count {
             let career_fname = match process.read_pointer_path::<asr_unreal::FNameKey>(context.offsets.goal_system.get_address(), asr::PointerSize::Bit64, &vec![context.offsets.careers, (i * 0x60) as u64]) {
-                Ok(v) => v,
-                Err(_) => asr_unreal::FNameKey::default(),
+                Ok(v) => Some(v),
+                Err(_) => None,
             };
 
             if career_fname == skater_fname {
@@ -373,12 +373,10 @@ impl CareerState {
             let mut has_invalid_goal = false;
 
             for i in self.goal_count..goal_count {
-                let goal_fname = match process.read_pointer_path::<asr_unreal::FNameKey>(context.offsets.goal_system.get_address(), asr::PointerSize::Bit64, &vec!(context.offsets.careers, (career_offset as u64 * 0x60) + 0x8 as u64, (i as u64 * 0x30) + 0x10 as u64)) {
-                    Ok(v) => v,
-                    Err(_) => asr_unreal::FNameKey::default(),
+                let goal_name = match process.read_pointer_path::<asr_unreal::FNameKey>(context.offsets.goal_system.get_address(), asr::PointerSize::Bit64, &vec!(context.offsets.careers, (career_offset as u64 * 0x60) + 0x8 as u64, (i as u64 * 0x30) + 0x10 as u64)) {
+                    Ok(v) => get_fname_string(process, &context.unreal_module, v),
+                    Err(_) => "".to_string(),
                 };
-
-                let goal_name = get_fname_string(process, &context.unreal_module, goal_fname);
 
                 if let Some((tour, level, idx, ty)) = GOAL_TABLE.get(goal_name.as_str()) {
                     if !self.goals[*tour as usize][*level as usize][*idx as usize] {

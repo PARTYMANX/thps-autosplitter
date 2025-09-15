@@ -199,6 +199,7 @@ pub async fn run(process: &Process, process_name: &str) {
 
                     asr::timer::pause_game_time();
                     igt_accumulator = 0;
+                    level_changed = false;
                 }
             },
             TimerState::Paused | TimerState::Running => {
@@ -229,6 +230,7 @@ pub async fn run(process: &Process, process_name: &str) {
                     prev_igt = Duration::seconds(-1);
                     asr::timer::resume_game_time();
 
+                    level_changed = false;
                     igt_accumulator = 0;    // so igt doesn't stick around
                 }
 

@@ -5,8 +5,8 @@ use crate::alcatraz_utils;
 struct State {
     level_name: String,
     goal_count: u32,
-    tokyo_medal: bool,
-    zoo_medal: bool,
+    thps3_clear_prediction: u8,
+    thps4_clear_prediction: u8,
     thps3_stars: u8,
     thps4_stars: u8,
     gamemode: u8,
@@ -20,6 +20,51 @@ impl State {
 
         let thps3state = career.get_tour_state(2);
         let thps4state = career.get_tour_state(3);
+
+        // if all but one level is complete, we can select which initial ending split criteria to use
+        // for future me because i'm stupid: this is intentially equal to num_levels - 1, we don't want to update criteria during the last level
+        // this will go away once first goal is done on last level, so make sure to retrieve from the last tick if prediction is invalid
+        let thps3_clear_prediction = if thps3state.levels_with_goals == 8 {
+            // two possible 2+ star states: all but one goal level done, or all but one comp done
+            if thps3state.goals == 50 && thps3state.gold_medals == 3 {
+                if thps3state.pro_goals == 28 {
+                    3
+                } else {
+                    2
+                }
+            } else if thps3state.goals == 60 && thps3state.gold_medals == 2 {
+                if thps3state.pro_goals == 32 {
+                    3
+                } else {
+                    2
+                }
+            } else {
+                1
+            }
+        } else {
+            0
+        };
+
+        let thps4_clear_prediction = if thps4state.levels_with_goals == 9 {
+            // two possible 2+ star states: all but one goal level done, or all but one comp done
+            if thps4state.goals == 60 && thps4state.gold_medals == 3 {
+                if thps4state.pro_goals == 33 {
+                    3
+                } else {
+                    2
+                }
+            } else if thps4state.goals == 70 && thps4state.gold_medals == 2 {
+                if thps4state.pro_goals == 37 {
+                    3
+                } else {
+                    2
+                }
+            } else {
+                1
+            }
+        } else {
+            0
+        };
 
         // check thps3 stars
         let thps3_stars = if thps3state.goals == 60 && thps3state.gold_medals == 3 {
@@ -56,8 +101,8 @@ impl State {
         Self {
             level_name: context.get_level_name(process),
             goal_count: career.get_goal_count(),
-            tokyo_medal: career.get_goal_state(2, 7, 0),
-            zoo_medal: career.get_goal_state(3, 8, 0),
+            thps3_clear_prediction,
+            thps4_clear_prediction,
             thps3_stars,
             thps4_stars,
             gamemode: context.get_gamemode(process),
@@ -95,7 +140,7 @@ pub async fn run(process: &Process, process_name: &str) {
 
     let mut starting_game = false;
     let mut ignore_next_level = false;
-    let mut pending_stars = 0;
+    let mut pending_split = false;
 
     loop {
         // update vars
@@ -104,6 +149,15 @@ pub async fn run(process: &Process, process_name: &str) {
         // if we see an invalid level name, fill in the previous
         if current_state.level_name.is_empty() || current_state.level_name == "None" {
             current_state.level_name = prev_state.level_name.clone();
+        }
+
+        // restore star prediction if not present
+        if current_state.thps3_clear_prediction == 0 {
+            current_state.thps3_clear_prediction = prev_state.thps3_clear_prediction;
+        }
+
+        if current_state.thps4_clear_prediction == 0 {
+            current_state.thps4_clear_prediction = prev_state.thps4_clear_prediction;
         }
 
         // update career
@@ -142,7 +196,7 @@ pub async fn run(process: &Process, process_name: &str) {
                         asr::print_message(format!("Starting timer...").as_str());
                     }
                     starting_game = false;
-                    pending_stars = 0;
+                    pending_split = false;
                     ignore_next_level = false;
                 }
             },
@@ -159,7 +213,7 @@ pub async fn run(process: &Process, process_name: &str) {
                 }
 
                 // split when second game is started
-                if ((current_state.tokyo_medal && current_state.level_name == "College") || (current_state.zoo_medal && current_state.level_name == "Foundry")) && starting_game && current_state.is_running {
+                if ((current_state.thps3_stars > 0 && current_state.level_name == "College") || (current_state.thps4_stars > 0 && current_state.level_name == "Foundry")) && starting_game && current_state.is_running {
                     if current_state.gamemode == 0x02 {
                         asr::timer::split();
                         asr::print_message(format!("Changed level; splitting timer...").as_str());
@@ -168,33 +222,22 @@ pub async fn run(process: &Process, process_name: &str) {
                 }
 
                 // split when all thps3 goals and golds are complete
-                if current_state.thps3_stars > prev_state.thps3_stars {
-                    pending_stars += current_state.thps3_stars - prev_state.thps3_stars;
+                if current_state.thps3_stars > prev_state.thps3_stars && current_state.thps3_stars >= current_state.thps3_clear_prediction {
+                    pending_split = true;
                     asr::print_message(format!("THPS3 {} star; ready to split...", current_state.thps3_stars).as_str());
                 }
 
-                if !current_state.is_running && pending_stars > 0 {
-                    for _ in 0..pending_stars {
-                        asr::timer::split();
-                        asr::print_message(format!("THPS3 star; splitting timer...").as_str());
-                    }
-                    
-                    pending_stars = 0;
-                }
-
                 // split when all thps4 goals and golds are complete
-                if current_state.thps4_stars > prev_state.thps4_stars {
-                    pending_stars += current_state.thps4_stars - prev_state.thps4_stars;
-                    asr::print_message(format!("THPS4 {} star; ready to split...", current_state.thps3_stars).as_str());
+                if current_state.thps4_stars > prev_state.thps4_stars && current_state.thps4_stars >= current_state.thps4_clear_prediction {
+                    pending_split = true;
+                    asr::print_message(format!("THPS4 {} star; ready to split...", current_state.thps4_stars).as_str());
                 }
 
-                if !current_state.is_running && pending_stars > 0 {
-                    for _ in 0..pending_stars {
-                        asr::timer::split();
-                        asr::print_message(format!("THPS4 star; splitting timer...").as_str());
-                    }
+                if !current_state.is_running && pending_split {
+                    asr::timer::split();
+                    asr::print_message(format!("Ended run for star; splitting timer...").as_str());
                     
-                    pending_stars = 0;
+                    pending_split = false;
                 }
 
                 // reset when on frontend with 0 pro points
@@ -202,7 +245,7 @@ pub async fn run(process: &Process, process_name: &str) {
                     asr::timer::reset();
                     asr::print_message(format!("Resetting timer...").as_str());
 
-                    pending_stars = 0;
+                    pending_split = false;
                     ignore_next_level = false;
                 }
             },

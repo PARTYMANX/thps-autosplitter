@@ -1,5 +1,7 @@
 use asr::{Address, Process, timer::TimerState};
 
+use crate::context::SplitterContext;
+
 struct State {
     level_id: u8,
     total_classic_goals: u8,
@@ -220,9 +222,11 @@ enum Gamemode {
     CLASSIC,
 }
 
-pub async fn run(process: &Process, process_name: &str) {
+pub async fn run(process: &Process, process_name: &str, context: &mut SplitterContext) {
     asr::print_message("Attached to THUG2!");
     asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
+
+    context.update();
 
     let base_addr = process.get_module_address(process_name).unwrap();
 
@@ -231,6 +235,8 @@ pub async fn run(process: &Process, process_name: &str) {
     let mut mode = Gamemode::NONE;
 
     loop {
+        context.update();
+
         // update vars
         let current_state = State::update(process, base_addr);
 
@@ -240,10 +246,10 @@ pub async fn run(process: &Process, process_name: &str) {
 
         // pause game time when loading, resume when done
         if current_state.is_loading && !prev_state.is_loading {
-            asr::timer::pause_game_time();
+            context.timer_pause_game_time();
             asr::print_message(format!("Starting Load...").as_str());
         } else if !current_state.is_loading && prev_state.is_loading {
-            asr::timer::resume_game_time();
+            context.timer_resume_game_time();
             asr::print_message(format!("Done Loading").as_str());
         }
 
@@ -267,40 +273,34 @@ pub async fn run(process: &Process, process_name: &str) {
                     Gamemode::NONE => {},
                     Gamemode::CAREER => {
                         if current_state.level_id != 0 && current_state.level_id != prev_state.level_id {
-                            asr::timer::split();
-                            asr::print_message(format!("Changed level; splitting timer...").as_str());
+                            context.timer_split("Changed level");
                         } 
                         
                         if current_state.is_game_finished && !prev_state.is_game_finished {
-                            asr::timer::split();
-                            asr::print_message(format!("Final cutscene; splitting timer...").as_str());
+                            context.timer_split("Final cutscene");
                         }
         
                         // reset when story start flag is unset
                         if current_state.level_id == 0 && !current_state.is_story_started && current_state.story_points == 0 {
-                            asr::timer::reset();
-                            asr::print_message(format!("Resetting timer...").as_str());
+                            context.timer_reset(false);
                             mode = Gamemode::NONE;
                         }
                     },
                     Gamemode::CLASSIC => {
                         if current_state.level_id != 0 && current_state.level_id != prev_state.level_id {
-                            asr::timer::split();
-                            asr::print_message(format!("Changed level; splitting timer...").as_str());
+                            context.timer_split("Changed level");
                         } 
 
                         if current_state.is_run_ended && !prev_state.is_run_ended && 
                             ((current_state.total_classic_goals < 120 && current_state.classic_difficulty == Difficulty::NORMAL && current_state.classic_triangle_goals >= 6) || 
                             (current_state.total_classic_goals < 120 && current_state.classic_difficulty == Difficulty::SICK && current_state.classic_triangle_goals >= 8) || 
                             (current_state.total_classic_goals == 140)) {
-                            asr::timer::split();
-                            asr::print_message(format!("End of classic mode; splitting timer...").as_str());
+                            context.timer_split("End of classic mode")
                         }
 
                         // reset when on 0 goals are completed
                         if current_state.level_id == 0 && prev_state.total_classic_goals == 0 {
-                            asr::timer::reset();
-                            asr::print_message(format!("Resetting timer...").as_str());
+                            context.timer_reset(false);
                             mode = Gamemode::NONE;
                         }
                     },
@@ -308,7 +308,23 @@ pub async fn run(process: &Process, process_name: &str) {
                 
             },
             TimerState::Ended | TimerState::Unknown | _ => {
-                // do nothing. maybe we should still run reset when it's ended?
+                match mode {
+                    Gamemode::NONE => {},
+                    Gamemode::CAREER => {
+                        // reset when story start flag is unset
+                        if current_state.level_id == 0 && !current_state.is_story_started && current_state.story_points == 0 {
+                            context.timer_reset(true);
+                            mode = Gamemode::NONE;
+                        }
+                    },
+                    Gamemode::CLASSIC => {
+                        // reset when on 0 goals are completed
+                        if current_state.level_id == 0 && prev_state.total_classic_goals == 0 {
+                            context.timer_reset(true);
+                            mode = Gamemode::NONE;
+                        }
+                    },
+                }
             },
         }
 

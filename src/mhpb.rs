@@ -1,5 +1,7 @@
 use asr::{Address, Process, timer::TimerState, time::Duration};
 
+use crate::context::SplitterContext;
+
 struct State {
     is_timer_running: bool, // got it
     _timer_vblanks: u32,
@@ -243,9 +245,11 @@ impl State {
     }
 }
 
-pub async fn run(process: &Process, process_name: &str) {
+pub async fn run(process: &Process, process_name: &str, context: &mut SplitterContext) {
     asr::print_message("Attached to MHPB!");
     asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
+
+    context.update();
 
     let base_addr = process.get_module_address(process_name).unwrap();
 
@@ -260,15 +264,17 @@ pub async fn run(process: &Process, process_name: &str) {
     let mut prev_level = 0;
 
     loop {
+        context.update();
+
         // update vars
         let mut current_state = State::update(process, base_addr);
 
         // pause game time when loading, resume when done
         if current_state.is_loading && !prev_state.is_loading {
-            asr::timer::pause_game_time();
+            context.timer_pause_game_time();
             asr::print_message(format!("Starting Load...").as_str());
         } else if !current_state.is_loading && prev_state.is_loading {
-            asr::timer::resume_game_time();
+            context.timer_resume_game_time();
             asr::print_message(format!("Done Loading").as_str());
         }
 
@@ -279,8 +285,7 @@ pub async fn run(process: &Process, process_name: &str) {
                 }
 
                 if matches!(current_state.module, Module::Game) && current_state.mode == 0 && current_state.goal_count == 0 && current_state.level_id == 0 && current_state.is_timer_running {
-                    asr::timer::start();
-                    asr::print_message(format!("Starting timer...").as_str());
+                    context.timer_start();
 
                     //asr::timer::pause_game_time();
                     _igt_accumulator = 0;
@@ -309,22 +314,19 @@ pub async fn run(process: &Process, process_name: &str) {
 
                 if matches!(current_state.module, Module::Game) && level_changed {
                     level_changed = false;
-                    asr::timer::split();
-                    asr::print_message(format!("Changed levels; splitting timer...").as_str());
+                    context.timer_split("Changed levels");
                 }
 
                 // split when all medals collected 
                 // TODO: add setting to only split when all goals and goals are collected
                 if matches!(current_state.module, Module::Game) && !game_done && current_state.medal_count == 2 {
                     game_done = true;
-                    asr::timer::split();
-                    asr::print_message(format!("Collected all medals; splitting timer...").as_str());
+                    context.timer_split("Collected all medals")
                 }
 
                 // reset when on a menu and no goals are complete on current rider
                 if matches!(current_state.module, Module::Frontend) && !current_state.is_loading && current_state.goal_count == 0 {
-                    asr::timer::reset();
-                    asr::print_message(format!("Resetting timer...").as_str());
+                    context.timer_reset(false);
 
                     _prev_igt = Duration::seconds(-1);
                     //asr::timer::resume_game_time();
@@ -356,7 +358,13 @@ pub async fn run(process: &Process, process_name: &str) {
                 }*/
             },
             TimerState::Ended | TimerState::Unknown | _ => {
-                // do nothing. maybe we should still run reset when it's ended?
+                // reset when on a menu and no goals are complete on current rider
+                if matches!(current_state.module, Module::Frontend) && !current_state.is_loading && current_state.goal_count == 0 {
+                    context.timer_reset(true);
+
+                    _prev_igt = Duration::seconds(-1);
+                    //asr::timer::resume_game_time();
+                }
             },
         }
 

@@ -1,5 +1,7 @@
 use asr::{Address, Process, timer::TimerState};
 
+use crate::context::SplitterContext;
+
 // NOTES:
 // POINTERS TO LEVEL IN INTEGER: 0x4e1e90 -> 0x134 -> 0x14 -> 0x690
 // POINTERS TO GOAL FLAGS: 0x4e1e90 -> 0x134 -> 0x14 -> 0x564 (EACH SET OF FLAGS IS 8 BYTES, 9 GOALS OR 3 MEDALS.  FOR MEDALS, BRONZE IS LSB)
@@ -112,9 +114,11 @@ impl State {
     }
 }
 
-pub async fn run(process: &Process, process_name: &str) {
+pub async fn run(process: &Process, process_name: &str, context: &mut SplitterContext) {
     asr::print_message("Attached to THPS3!");
     asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
+
+    context.update();
 
     let base_addr = process.get_module_address(process_name).unwrap();
 
@@ -125,15 +129,17 @@ pub async fn run(process: &Process, process_name: &str) {
     let mut prev_state = State::update(process, base_addr);
 
     loop {
+        context.update();
+
         // update vars
         let current_state = State::update(process, base_addr);
 
         // pause game time when loading, resume when done
         if current_state.is_loading && !prev_state.is_loading {
-            asr::timer::pause_game_time();
+            context.timer_pause_game_time();
             asr::print_message(format!("Starting Load...").as_str());
         } else if !current_state.is_loading && prev_state.is_loading {
-            asr::timer::resume_game_time();
+            context.timer_resume_game_time();
             asr::print_message(format!("Done Loading").as_str());
         }
 
@@ -173,15 +179,13 @@ pub async fn run(process: &Process, process_name: &str) {
 
                 // when goal cams end, start timer
                 if foundry_started && !current_state.is_loading && !current_state.is_paused && current_state.is_timer_running {
-                    asr::timer::start();
-                    asr::print_message(format!("Starting timer...").as_str());
+                    context.timer_start();
                 }
             },
             TimerState::Paused | TimerState::Running => {
                 // split on level changes (except skateshop and tokyo to cruise ship, since that's handled when the comp ends)
                 if current_state.level_id != prev_state.level_id && current_state.level_id != 0 && prev_state.level_id != 8 && current_state.level_id != 9 {
-                    asr::timer::split();
-                    asr::print_message(format!("Changed level; splitting timer...").as_str());
+                    context.timer_split("Changed level");
                 }
 
                 // any% end (end of medal run on tokyo)
@@ -189,25 +193,25 @@ pub async fn run(process: &Process, process_name: &str) {
                 // because this has been inconsistent in the past, the medal check is a backup if that fails.  the medal count is only updated after the ceremony, so it's going to be late for splitting
                 if !tokyo_complete && ((current_state.level_id == 8 && tokyo_started && current_state.comp_is_over && current_state.comp_ranking <= 3) || current_state.medal_count == 3) {
                     tokyo_complete = true;
-                    asr::timer::split();
-                    asr::print_message(format!("Finished Tokyo; splitting timer...").as_str());
+                    context.timer_split("Finished Tokyo");
                 }
 
                 // ag&g end (all goals and golds collected and run is ended)
                 if all_goals_and_golds_complete && !current_state.is_timer_running {
                     all_goals_and_golds_complete = false;
-                    asr::timer::split();
-                    asr::print_message(format!("Collected all goals and golds; splitting timer...").as_str());
+                    context.timer_split("Collected all goals and golds");
                 }
 
-                // reset when going back to skateshop
+                // reset when in skateshop with no goals complete
                 if current_state.level_id == 0 && current_state.goal_count == 0 {
-                    asr::timer::reset();
-                    asr::print_message(format!("Resetting timer...").as_str());
+                    context.timer_reset(false);
                 }
             },
             TimerState::Ended | TimerState::Unknown | _ => {
-                // do nothing. maybe we should still run reset when it's ended?
+                // reset when in skateshop with no goals complete
+                if current_state.level_id == 0 && current_state.goal_count == 0 {
+                    context.timer_reset(true);
+                }
             },
         }
 

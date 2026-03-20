@@ -2,6 +2,8 @@ use std::{collections::HashSet, rc::Rc, cell::RefCell};
 
 use asr::{Address, Process, signature::Signature, timer::TimerState};
 
+use crate::context::SplitterContext;
+
 struct Offsets {
     skmodule: u32,
     load_counter: u32,
@@ -441,9 +443,11 @@ static CASINO_GOALS: [u32; 7] = [
     0xd67b166d,
 ];
 
-pub async fn run(process: &Process, process_name: &str) {
+pub async fn run(process: &Process, process_name: &str, context: &mut SplitterContext) {
     asr::print_message("Attached to THAW!");
     asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
+
+    context.update();
 
     let base_addr = process.get_module_address(process_name).unwrap();
     let module_size = process.get_module_size(process_name).unwrap();
@@ -471,6 +475,8 @@ pub async fn run(process: &Process, process_name: &str) {
     ];
 
     loop {
+        context.update();
+
         // update vars
         let current_state = State::update(process, base_addr, &offsets);
 
@@ -513,21 +519,21 @@ pub async fn run(process: &Process, process_name: &str) {
 
                 if is_paused {
                     is_paused = false;
-                    asr::timer::resume_game_time();
-                    asr::print_message(format!("Done loading!").as_str());
+                    context.timer_resume_game_time();
+                    asr::print_message(&format!("Done loading!"));
                 }
 
                 // start story when level == 1, no goals are complete, and goal is active
                 if current_state.level_id == 1 && current_state.story_goals == 0 && current_state.run_is_active {
-                    asr::timer::start();
-                    asr::print_message(&format!("Starting timer for Story..."));
+                    context.timer_start();
+                    asr::print_message(&format!("Playing Story..."));
                     mode = Gamemode::CAREER;
                 }
 
                 // start classic when level == 11 from menu
                 if current_state.level_id == 11 && prev_state.level_id == 0 && current_state.classic_goals == 0 {
-                    asr::timer::start();
-                    asr::print_message(&format!("Starting timer for Classic..."));
+                    context.timer_start();
+                    asr::print_message(&format!("Playing Classic..."));
                     mode = Gamemode::CLASSIC;
                 }
             },
@@ -537,14 +543,13 @@ pub async fn run(process: &Process, process_name: &str) {
                     Gamemode::CAREER => {
                         if is_paused {
                             is_paused = false;
-                            asr::timer::resume_game_time();
-                            asr::print_message(format!("Done loading!").as_str());
+                            context.timer_resume_game_time();
+                            asr::print_message(&format!("Done loading!"));
                         }
 
                         // split on unlock or visit beverly hills
                         if !story_flags[0] && (completed_goals.contains(&0x7a446a0a) || (current_state.level_id == 2 && prev_state.level_id != 2)) {
-                            asr::timer::split();
-                            asr::print_message(format!("Unlocked or skipped to Beverly Hills; splitting timer...").as_str());
+                            context.timer_split("Unlocked or skipped to Beverly Hills");
                             story_flags[0] = true;
                         }
 
@@ -566,72 +571,62 @@ pub async fn run(process: &Process, process_name: &str) {
                             }
 
                             if ranch_conditions >= 3 {
-                                asr::timer::split();
-                                asr::print_message(format!("Unlocked Skate Ranch; splitting timer...").as_str());
+                                context.timer_split("Unlocked Skate Ranch");
                                 story_flags[1] = true;
                             }
                         }
 
                         // split on unlock downtown
                         if !story_flags[2] && completed_goals.contains(&0x8f0cd51c) {
-                            asr::timer::split();
-                            asr::print_message(format!("Unlocked Downtown; splitting timer...").as_str());
+                            context.timer_split("Unlocked Downtown");
                             story_flags[2] = true;
                         }
 
                         // split on unlock amjam
                         if !story_flags[3] && completed_goals.contains(&0x607572ca) {
-                            asr::timer::split();
-                            asr::print_message(format!("Unlocked Amjam; splitting timer...").as_str());
+                            context.timer_split("Unlocked Amjam");
                             story_flags[3] = true;
                         }
 
                         // split on win amjam
                         if !story_flags[4] && completed_goals.contains(&0x3a800176) {
-                            asr::timer::split();
-                            asr::print_message(format!("Won Amjam; splitting timer...").as_str());
+                            context.timer_split("Won Amjam");
                             story_flags[4] = true;
                         }
 
                         // split on unlock santa monica
                         if !story_flags[5] && completed_goals.contains(&0xb9415865) {
-                            asr::timer::split();
-                            asr::print_message(format!("Unlocked Santa Monica; splitting timer...").as_str());
+                            context.timer_split("Unlocked Santa Monica");
                             story_flags[5] = true;
                         }
 
                         // split on unlock oil rig
                         if !story_flags[6] && completed_goals.contains(&0xea9af00c) {
-                            asr::timer::split();
-                            asr::print_message(format!("Unlocked Oil Rig; splitting timer...").as_str());
+                            context.timer_split("Unlocked Oil Rig");
                             story_flags[6] = true;
                         }
 
                         // split on finish oil rig
                         if !story_flags[7] && completed_goals.contains(&0xd32df1bb) {
-                            asr::timer::split();
-                            asr::print_message(format!("Finished Oil Rig; splitting timer...").as_str());
+                            context.timer_split("Finished Oil Rig");
                             story_flags[7] = true;
                         }
 
                         // split on unlock east la
                         if !story_flags[8] && completed_goals.contains(&0xda77ca92) {
-                            asr::timer::split();
-                            asr::print_message(format!("Unlocked East LA; splitting timer...").as_str());
+                            context.timer_split("Unlocked East LA");
                             story_flags[8] = true;
                         }
 
                         // split on unlock santa monica
                         if !story_flags[9] && completed_goals.contains(&0x97e3e2cf) {
-                            asr::timer::split();
-                            asr::print_message(format!("Started Pro Goals; splitting timer...").as_str());
+                            context.timer_split("Started Pro Goals");
                             story_flags[9] = true;
                         }
 
                         // split on unlock casino
                         if !story_flags[10] && completed_goals.contains(&0x82510d90) {
-                            asr::timer::split();
-                            asr::print_message(format!("Unlocked Casino; splitting timer...").as_str());
+                            context.timer_split("Unlocked Casino");
                             story_flags[10] = true;
                         }
 
@@ -653,59 +648,68 @@ pub async fn run(process: &Process, process_name: &str) {
                             }
 
                             if unlock_conditions >= 7 {
-                                asr::timer::split();
-                                asr::print_message(format!("Unlocked final goal; splitting timer...").as_str());
+                                context.timer_split("Unlocked finale");
                                 story_flags[11] = true;
                             }
                         }
 
                         // split on final goal
                         if !story_flags[12] && completed_goals.contains(&0x99156422) {
-                            asr::timer::split();
-                            asr::print_message(format!("Completed final goal; splitting timer...").as_str());
+                            context.timer_split("Completed Finale");
                             story_flags[12] = true;
                         }
 
                         // reset on 0 goals complete on menu
                         if current_state.level_id == 0 && current_state.story_goals == 0 {
-                            asr::timer::reset();
-                            asr::print_message(format!("Resetting timer...").as_str());
+                            context.timer_reset(false);
                             story_flags.fill(false);
                         }
                     },
                     Gamemode::CLASSIC => {
                         if current_state.load_counter > 0 && !is_paused {
                             is_paused = true;
-                            asr::timer::pause_game_time();
+                            context.timer_pause_game_time();
                             asr::print_message(format!("Starting Load... {}", current_state.load_counter).as_str());
                         } else if current_state.load_counter == 0 && is_paused {
                             is_paused = false;
-                            asr::timer::resume_game_time();
+                            context.timer_resume_game_time();
                             asr::print_message(format!("Done loading!").as_str());
                         }
 
                         // split on level changes (except main menu)
                         if current_state.level_id != prev_state.level_id && current_state.level_id != 0 {
-                            asr::timer::split();
-                            asr::print_message(format!("Changed level; splitting timer...").as_str());
+                            context.timer_split("Changed level");
                         }
 
                         // split on end run when 51 goals are complete
                         if current_state.classic_goals >= 51 && !current_state.run_is_active && prev_state.run_is_active {  // FIXME: goes off when restarting
-                            asr::timer::split();
-                            asr::print_message(format!("Classic complete; splitting timer...").as_str());
+                            context.timer_split("Completed Classic Mode");
                         }
 
                         // reset on 0 goals complete on menu
                         if current_state.level_id == 0 && current_state.classic_goals == 0 {
-                            asr::timer::reset();
-                            asr::print_message(format!("Resetting timer...").as_str());
+                            context.timer_reset(false);
                         }
                     },
                 }
             },
             TimerState::Ended | TimerState::Unknown | _ => {
-                // do nothing. maybe we should still run reset when it's ended?
+                match mode {
+                    Gamemode::NONE => {},
+                    Gamemode::CAREER => {
+                        // reset on 0 goals complete on menu
+                        if current_state.level_id == 0 && current_state.story_goals == 0 {
+                            context.timer_reset(true);
+                            story_flags.fill(false);
+                        }
+                    },
+                    Gamemode::CLASSIC => {
+                        // reset on 0 goals complete on menu
+                        if current_state.level_id == 0 && current_state.classic_goals == 0 {
+                            context.timer_reset(true);
+                        }
+                    },
+                }
             },
         }
 

@@ -257,14 +257,14 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
             TimerState::NotRunning => {
                 // story
                 if current_state.level_id == 1 && prev_state.level_id == 9 {
-                    asr::timer::start();
-                    asr::print_message(format!("Starting timer for story mode...").as_str());
+                    context.timer_start();
+                    asr::print_message(format!("Playing story mode!").as_str());
                     mode = Gamemode::CAREER;
                 }
                 // classic
                 if current_state.level_id == 2 && prev_state.level_id == 0 && current_state.total_classic_goals == 0 {
-                    asr::timer::start();
-                    asr::print_message(format!("Starting timer for classic mode...").as_str());
+                    context.timer_start();
+                    asr::print_message(format!("Playing classic mode!").as_str());
                     mode = Gamemode::CLASSIC;
                 }
             },

@@ -34,8 +34,6 @@ async fn main() {
         process.until_closes(async {
             asr::print_message(&format!("Detected {}", name));
 
-            context.timer_resume_game_time();
-
             match game {
                 Game::THPS2 => thps2::run(&process, name, &mut context).await,
                 Game::THPS3 => thps3::run(&process, name, &mut context).await,

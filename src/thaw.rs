@@ -447,6 +447,10 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
     asr::print_message("Attached to THAW!");
     asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
 
+    asr::print_message("");
+    asr::print_message("In memory of Coop");
+    asr::print_message("");
+
     context.update();
 
     let base_addr = process.get_module_address(process_name).unwrap();

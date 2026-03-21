@@ -1,4 +1,4 @@
-use asr::{timer::TimerState, Process};
+use asr::{Process, timer::TimerState};
 
 use crate::{alcatraz_utils, context::SplitterContext};
 

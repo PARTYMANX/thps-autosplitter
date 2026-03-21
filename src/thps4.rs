@@ -1,4 +1,4 @@
-use asr::{timer::TimerState, Address, Process};
+use asr::{Address, Process, timer::TimerState};
 
 use crate::context::SplitterContext;
 

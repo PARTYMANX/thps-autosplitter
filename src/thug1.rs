@@ -1,6 +1,6 @@
 use std::u64;
 
-use asr::{string::ArrayCString, timer::TimerState, Address, Process};
+use asr::{Address, Process, string::ArrayCString, timer::TimerState};
 
 use crate::context::SplitterContext;
 

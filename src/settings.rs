@@ -1,4 +1,4 @@
-use asr::settings::{gui::Title, Gui};
+use asr::settings::{Gui, gui::Title};
 
 #[derive(Gui)]
 pub struct Settings {

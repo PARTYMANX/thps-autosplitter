@@ -1,4 +1,4 @@
-use asr::{timer::TimerState, Process};
+use asr::{Process, timer::TimerState};
 
 use crate::{alcatraz_utils, context::SplitterContext};
 
@@ -31,17 +31,9 @@ impl State {
         let thps3_clear_prediction = if thps3state.levels_with_goals == 8 {
             // two possible 2+ star states: all but one goal level done, or all but one comp done
             if thps3state.goals == 50 && thps3state.gold_medals == 3 {
-                if thps3state.pro_goals == 28 {
-                    3
-                } else {
-                    2
-                }
+                if thps3state.pro_goals == 28 { 3 } else { 2 }
             } else if thps3state.goals == 60 && thps3state.gold_medals == 2 {
-                if thps3state.pro_goals == 32 {
-                    3
-                } else {
-                    2
-                }
+                if thps3state.pro_goals == 32 { 3 } else { 2 }
             } else {
                 1
             }
@@ -52,17 +44,9 @@ impl State {
         let thps4_clear_prediction = if thps4state.levels_with_goals == 9 {
             // two possible 2+ star states: all but one goal level done, or all but one comp done
             if thps4state.goals == 60 && thps4state.gold_medals == 3 {
-                if thps4state.pro_goals == 33 {
-                    3
-                } else {
-                    2
-                }
+                if thps4state.pro_goals == 33 { 3 } else { 2 }
             } else if thps4state.goals == 70 && thps4state.gold_medals == 2 {
-                if thps4state.pro_goals == 37 {
-                    3
-                } else {
-                    2
-                }
+                if thps4state.pro_goals == 37 { 3 } else { 2 }
             } else {
                 1
             }
@@ -72,11 +56,7 @@ impl State {
 
         // check thps3 stars
         let thps3_stars = if thps3state.goals == 60 && thps3state.gold_medals == 3 {
-            if thps3state.pro_goals == 33 {
-                3
-            } else {
-                2
-            }
+            if thps3state.pro_goals == 33 { 3 } else { 2 }
         } else {
             if thps3state.levels_with_goals == 9 {
                 1
@@ -87,11 +67,7 @@ impl State {
 
         // check thps4 stars
         let thps4_stars = if thps4state.goals == 70 && thps4state.gold_medals == 3 {
-            if thps4state.pro_goals == 38 {
-                3
-            } else {
-                2
-            }
+            if thps4state.pro_goals == 38 { 3 } else { 2 }
         } else {
             if thps4state.levels_with_goals == 10 {
                 1

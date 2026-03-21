@@ -1,4 +1,4 @@
-use asr::{timer::TimerState, Address, Process};
+use asr::{Address, Process, timer::TimerState};
 
 use crate::context::SplitterContext;
 
@@ -176,20 +176,20 @@ fn get_difficulties(process: &Process, addr: u32) -> (Difficulty, Difficulty) {
             // "goalmanager_params"
             result = read_goal_params(process, component.data);
         } /*else if component.ttype >> 1 == 0xa {
-              if let Some(goal) = read_goal(process, component.data) {
-                  if goal.complete && goal.unk2 == 1 && state.completed_goals.borrow_mut().insert(component.name) {
-                      if matches!(goal.mode, Gamemode::CAREER) {
-                          state.story_goals += 1;
-                      } else {
-                          state.classic_goals += 1;
-                      }
-                  }
+        if let Some(goal) = read_goal(process, component.data) {
+        if goal.complete && goal.unk2 == 1 && state.completed_goals.borrow_mut().insert(component.name) {
+        if matches!(goal.mode, Gamemode::CAREER) {
+        state.story_goals += 1;
+        } else {
+        state.classic_goals += 1;
+        }
+        }
 
-                  //if goal.is_locked {
-                  //    state.locked_goals.borrow_mut().insert(component.name);
-                  //}
-              }
-          }*/
+        //if goal.is_locked {
+        //    state.locked_goals.borrow_mut().insert(component.name);
+        //}
+        }
+        }*/
 
         comp = component.pnext;
     }

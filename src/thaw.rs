@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
-use asr::{signature::Signature, timer::TimerState, Address, Process};
+use asr::{Address, Process, signature::Signature, timer::TimerState};
 
 use crate::context::SplitterContext;
 
@@ -452,8 +452,8 @@ fn update_goals(process: &Process, addr: u32, state: &mut State) {
                     }
                 }
             } //else if flags & 0x20 != 0 {
-              //    state.locked_goals.borrow_mut().insert(node.name);
-              //}
+            //    state.locked_goals.borrow_mut().insert(node.name);
+            //}
 
             if flags & 0x100 != 0 {
                 state.run_is_active = true;

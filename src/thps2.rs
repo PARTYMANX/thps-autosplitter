@@ -1,5 +1,7 @@
 use asr::{Address, Process, timer::TimerState, time::Duration};
 
+use crate::context::SplitterContext;
+
 // looking for things TODO: implement these alternate offsets based off of the Activision Value release executable:
 // level 0x561c90 / 0x161c90
 // also possibly 0x56a898
@@ -163,9 +165,11 @@ impl State {
     }
 }
 
-pub async fn run(process: &Process, process_name: &str) {
+pub async fn run(process: &Process, process_name: &str, context: &mut SplitterContext) {
     asr::print_message("Attached to THPS2!");
     asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
+
+    context.update();
 
     let base_addr = process.get_module_address(process_name).unwrap();
 
@@ -177,10 +181,12 @@ pub async fn run(process: &Process, process_name: &str) {
     let mut prev_igt = Duration::seconds(-1);
 
     loop {
+        context.update();
+
         // update vars
         let mut current_state = State::update(process, base_addr);
 
-        // if the end of time is changing, don't count any seconds yet, we're in a comp intro (also if the end is in 1 minute we know that's not right and we're starting the comp intro)
+        // if the end of time is changing, don't count any seconds yet because we're in a comp intro (also if the end is in 1 minute we know that's not right and we're starting the comp intro)
         let is_timer_unstable = current_state.timer_end != prev_state.timer_end || current_state.timer_end == 3630;    
 
         if is_timer_unstable {
@@ -194,10 +200,9 @@ pub async fn run(process: &Process, process_name: &str) {
                 }
 
                 if current_state.mode == 1 && current_state.goal_count == 0 && current_state.level_id == 0 && current_state.is_timer_running {
-                    asr::timer::start();
-                    asr::print_message(format!("Starting timer...").as_str());
-
-                    asr::timer::pause_game_time();
+                    context.timer_start();
+                    context.timer_pause_game_time();
+                    
                     igt_accumulator = 0;
                     level_changed = false;
                 }
@@ -210,25 +215,22 @@ pub async fn run(process: &Process, process_name: &str) {
 
                 if current_state.screen == 6 && level_changed {
                     level_changed = false;
-                    asr::timer::split();
-                    asr::print_message(format!("Changed levels; splitting timer...").as_str());
+                    context.timer_split("Changed levels");
                 }
 
                 // split when all medals collected 
                 // TODO: add setting to only split when all goals and goals are collected
                 if !game_done && current_state.medal_count == 3 {
                     game_done = true;
-                    asr::timer::split();
-                    asr::print_message(format!("Collected all medals; splitting timer...").as_str());
+                    context.timer_split("Collected all medals");
                 }
 
                 // reset when on a menu and no goals are complete on any skater
                 if current_state.screen != 6 && State::check_for_reset(process, base_addr) {
-                    asr::timer::reset();
-                    asr::print_message(format!("Resetting timer...").as_str());
+                    context.timer_reset(false);
 
                     prev_igt = Duration::seconds(-1);
-                    asr::timer::resume_game_time();
+                    context.timer_resume_game_time();
 
                     level_changed = false;
                     igt_accumulator = 0;    // so igt doesn't stick around
@@ -249,11 +251,20 @@ pub async fn run(process: &Process, process_name: &str) {
                 // prevent excess messaging and only send igt when relevant
                 if igt_duration != prev_igt {
                     prev_igt = igt_duration;
-                    asr::timer::set_game_time(igt_duration);
+                    context.timer_set_game_time(igt_duration);
                 }
             },
             TimerState::Ended | TimerState::Unknown | _ => {
-                // do nothing. maybe we should still run reset when it's ended?
+                // reset when on a menu and no goals are complete on any skater
+                if current_state.screen != 6 && State::check_for_reset(process, base_addr) {
+                    context.timer_reset(true);
+
+                    prev_igt = Duration::seconds(-1);
+                    context.timer_resume_game_time();
+
+                    level_changed = false;
+                    igt_accumulator = 0;    // so igt doesn't stick around
+                }
             },
         }
 

@@ -1,6 +1,6 @@
 use asr::{timer::TimerState, Process};
 
-use crate::alcatraz_utils;
+use crate::{alcatraz_utils, context::SplitterContext};
 
 struct State {
     level_name: String,
@@ -112,9 +112,11 @@ impl State {
     }
 }
 
-pub async fn run(process: &Process, process_name: &str) {
+pub async fn run(process: &Process, process_name: &str, splitter_context: &mut SplitterContext) {
     asr::print_message("Attached to THPS3+4!");
     asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
+
+    splitter_context.update();
 
     let base_addr = process.get_module_address(process_name).unwrap();
 
@@ -143,6 +145,8 @@ pub async fn run(process: &Process, process_name: &str) {
     let mut pending_split = false;
 
     loop {
+        splitter_context.update();
+
         // update vars
         let mut current_state = State::update(process, &context, &mut career);
 
@@ -170,10 +174,10 @@ pub async fn run(process: &Process, process_name: &str) {
 
         // pause game time when loading, resume when done
         if current_state.is_loading && !prev_state.is_loading {
-            asr::timer::pause_game_time();
+            splitter_context.timer_pause_game_time();
             asr::print_message(format!("Starting Load...").as_str());
         } else if !current_state.is_loading && prev_state.is_loading {
-            asr::timer::resume_game_time();
+            splitter_context.timer_resume_game_time();
             asr::print_message(format!("Done Loading").as_str());
         }
 
@@ -192,8 +196,7 @@ pub async fn run(process: &Process, process_name: &str) {
                 // start when no goals have been completed and starting a first level
                 if starting_game && current_state.goal_count == 0 && current_state.is_running {
                     if current_state.gamemode == 0x02 {
-                        asr::timer::start();
-                        asr::print_message(format!("Starting timer...").as_str());
+                        splitter_context.timer_start();
                     }
                     starting_game = false;
                     pending_split = false;
@@ -204,8 +207,7 @@ pub async fn run(process: &Process, process_name: &str) {
                 // split on level changes (except frontend)
                 if !starting_game && !current_state.level_name.is_empty() && current_state.level_name != prev_state.level_name && current_state.level_name != "FrontEnd" {
                     if !ignore_next_level {
-                        asr::timer::split();
-                        asr::print_message(format!("Changed level; splitting timer...").as_str());
+                        splitter_context.timer_split("Changed level");
                     } else {
                         asr::print_message("Changed level; Ignoring level split!");
                         ignore_next_level = false;
@@ -215,8 +217,7 @@ pub async fn run(process: &Process, process_name: &str) {
                 // split when second game is started
                 if ((current_state.thps3_stars > 0 && current_state.level_name == "College") || (current_state.thps4_stars > 0 && current_state.level_name == "Foundry")) && starting_game && current_state.is_running {
                     if current_state.gamemode == 0x02 {
-                        asr::timer::split();
-                        asr::print_message(format!("Changed level; splitting timer...").as_str());
+                        splitter_context.timer_split("Changed level");
                     }
                     starting_game = false;
                 }
@@ -234,23 +235,27 @@ pub async fn run(process: &Process, process_name: &str) {
                 }
 
                 if !current_state.is_running && pending_split {
-                    asr::timer::split();
-                    asr::print_message(format!("Ended run for star; splitting timer...").as_str());
+                    splitter_context.timer_split("Ended run for star");
                     
                     pending_split = false;
                 }
 
                 // reset when on frontend with 0 pro points
                 if current_state.level_name == "FrontEnd" && current_state.goal_count == 0 {
-                    asr::timer::reset();
-                    asr::print_message(format!("Resetting timer...").as_str());
+                    splitter_context.timer_reset(false);
 
                     pending_split = false;
                     ignore_next_level = false;
                 }
             },
             TimerState::Ended | TimerState::Unknown | _ => {
-                // do nothing. maybe we should still run reset when it's ended?
+                // reset when on frontend with 0 pro points
+                if current_state.level_name == "FrontEnd" && current_state.goal_count == 0 {
+                    splitter_context.timer_reset(true);
+
+                    pending_split = false;
+                    ignore_next_level = false;
+                }
             },
         }
 

@@ -2,6 +2,8 @@ use std::u64;
 
 use asr::{Address, Process, timer::TimerState, string::ArrayCString};
 
+use crate::context::SplitterContext;
+
 struct State {
     has_played_intro: bool,
     level_id: u8,
@@ -55,9 +57,11 @@ impl State {
     }
 }
 
-pub async fn run(process: &Process, process_name: &str) {
+pub async fn run(process: &Process, process_name: &str, context: &mut SplitterContext) {
     asr::print_message("Attached to THUG1!");
     asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
+
+    context.update();
 
     let base_addr = process.get_module_address(process_name).unwrap();
 
@@ -80,15 +84,17 @@ pub async fn run(process: &Process, process_name: &str) {
     ];
 
     loop {
+        context.update();
+
         // update vars
         let current_state = State::update(process, base_addr);
 
         // pause game time when loading, resume when done
         if current_state.is_loading && !prev_state.is_loading {
-            asr::timer::pause_game_time();
+            context.timer_pause_game_time();
             asr::print_message(format!("Starting Load...").as_str());
         } else if !current_state.is_loading && prev_state.is_loading {
-            asr::timer::resume_game_time();
+            context.timer_resume_game_time();
             asr::print_message(format!("Done Loading").as_str());
         }
 
@@ -96,92 +102,82 @@ pub async fn run(process: &Process, process_name: &str) {
             TimerState::NotRunning => {
                 story_flags.fill(false);
                 if current_state.has_played_intro && !prev_state.has_played_intro {
-                    asr::timer::start();
-                    asr::print_message(format!("Starting timer...").as_str());
+                    context.timer_start();
                 }
             },
             TimerState::Paused | TimerState::Running => {
                 if !story_flags[0] && current_state.chapter == 3 && current_state.level_id == 2 {
-                    asr::timer::split();
-                    asr::print_message(format!("Started Manhattan; splitting timer...").as_str());
+                    context.timer_split("Started Manhattan");
                     story_flags[0] = true;
                 }
 
                 if !story_flags[1] && current_state.chapter == 6 && current_state.level_id == 3 {
-                    asr::timer::split();
-                    asr::print_message(format!("Started Tampa; splitting timer...").as_str());
+                    context.timer_split("Started Tampa");
                     story_flags[1] = true;
                 }
 
                 if !story_flags[2] && current_state.chapter == 10 && current_state.level_id == 4 {
-                    asr::timer::split();
-                    asr::print_message(format!("Started San Diego; splitting timer...").as_str());
+                    context.timer_split("Started San Diego");
                     story_flags[2] = true;
                 }
 
                 if !story_flags[3] && current_state.chapter == 13 && current_state.level_id == 5 {
-                    asr::timer::split();
-                    asr::print_message(format!("Started Hawaii; splitting timer...").as_str());
+                    context.timer_split("Started Hawaii");
                     story_flags[3] = true;
                 }
 
                 if !story_flags[4] && current_state.chapter == 16 && current_state.level_id == 6 {
-                    asr::timer::split();
-                    asr::print_message(format!("Started Vancouver; splitting timer...").as_str());
+                    context.timer_split("Started Vancouver");
                     story_flags[4] = true;
                 }
 
                 if !story_flags[5] && current_state.chapter == 17 && current_state.level_id == 7 {
-                    asr::timer::split();
-                    asr::print_message(format!("Started Slam City Jam; splitting timer...").as_str());
+                    context.timer_split("Started Slam City Jam");
                     story_flags[5] = true;
                 }
 
                 if !story_flags[6] && current_state.chapter == 18 && current_state.level_id == 6 {
-                    asr::timer::split();
-                    asr::print_message(format!("Started Vancouver 2; splitting timer...").as_str());
+                    context.timer_split("Started Vancouver 2");
                     story_flags[6] = true;
                 }
 
                 if !story_flags[7] && current_state.chapter == 19 && current_state.level_id == 8 {
-                    asr::timer::split();
-                    asr::print_message(format!("Started Moscow; splitting timer...").as_str());
+                    context.timer_split("Started Moscow");
                     story_flags[7] = true;
                 }
                 
                 if !story_flags[8] && current_state.chapter == 22 && current_state.level_id == 1 {
-                    asr::timer::split();
-                    asr::print_message(format!("Started New Jersey 2; splitting timer...").as_str());
+                    context.timer_split("Started New Jersey 2");
                     story_flags[8] = true;
                 }
 
                 if !story_flags[9] && current_state.chapter == 25 && current_state.level_id != 20 {
-                    asr::timer::split();
-                    asr::print_message(format!("Started Pro Goals; splitting timer...").as_str());
+                    context.timer_split("Started Pro Goals");
                     story_flags[9] = true;
                 }
 
                 if !story_flags[10] && current_state.chapter == 26 && current_state.level_id == 1 {
-                    asr::timer::split();
-                    asr::print_message(format!("Started Eric's Line; splitting timer...").as_str());
+                    context.timer_split("Started Eric's Line");
                     story_flags[10] = true;
                 }
 
                 if !story_flags[11] && current_state.chapter == 27 {
-                    asr::timer::split();
-                    asr::print_message(format!("Finished Story; splitting timer...").as_str());
+                    context.timer_split("Finished Story");
                     story_flags[11] = true;
                 }
 
                 // reset when on main menu with a career not started
                 if current_state.level_id == 0 && !current_state.is_career_started {
-                    asr::timer::reset();
-                    asr::print_message(format!("Resetting timer...").as_str());
+                    context.timer_reset(false);
                     story_flags.fill(false);
                 }
             },
             TimerState::Ended | TimerState::Unknown | _ => {
-                // do nothing. maybe we should still run reset when it's ended?
+                // reset when on main menu with a career not started
+                if current_state.level_id == 0 && !current_state.is_career_started {
+                    context.timer_reset(true);
+                    story_flags.fill(false);
+                }
             },
         }
 

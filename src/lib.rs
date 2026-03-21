@@ -1,5 +1,7 @@
 use asr::Process;
 
+use crate::context::SplitterContext;
+
 mod thps2;
 mod thps3;
 mod thps4;
@@ -12,10 +14,17 @@ mod mhpb;
 
 mod alcatraz_utils;
 
+mod settings;
+mod context;
+
 asr::async_main!(stable);
 
 async fn main() {
+    let mut context = SplitterContext::new();
+
     loop {
+        context.update();
+
         asr::print_message("Looking for process...");
 
         let (&name, &game, process) = asr::future::retry(|| {
@@ -23,18 +32,18 @@ async fn main() {
         }).await;
 
         process.until_closes(async {
-            asr::print_message(format!("Detected {}", name).as_str());
+            asr::print_message(&format!("Detected {}", name));
 
             match game {
-                Game::THPS2 => thps2::run(&process, name).await,
-                Game::THPS3 => thps3::run(&process, name).await,
-                Game::THPS4 => thps4::run(&process, name).await,
-                Game::THUG1 => thug1::run(&process, name).await,
-                Game::THUG2 => thug2::run(&process, name).await,
-                Game::THAW => thaw::run(&process, name).await,
-                Game::THPS12 => thps12::run(&process, name).await,
-                Game::THPS34 => thps34::run(&process, name).await,
-                Game::MHPB => mhpb::run(&process, name).await,
+                Game::THPS2 => thps2::run(&process, name, &mut context).await,
+                Game::THPS3 => thps3::run(&process, name, &mut context).await,
+                Game::THPS4 => thps4::run(&process, name, &mut context).await,
+                Game::THUG1 => thug1::run(&process, name, &mut context).await,
+                Game::THUG2 => thug2::run(&process, name, &mut context).await,
+                Game::THAW => thaw::run(&process, name, &mut context).await,
+                Game::THPS12 => thps12::run(&process, name, &mut context).await,
+                Game::THPS34 => thps34::run(&process, name, &mut context).await,
+                Game::MHPB => mhpb::run(&process, name, &mut context).await,
             }
             
             asr::future::next_tick().await;
@@ -42,8 +51,16 @@ async fn main() {
     
         asr::print_message("Game Closed");
 
-        if matches!(asr::timer::state(), asr::timer::TimerState::Running) || matches!(asr::timer::state(), asr::timer::TimerState::Paused) {
-            asr::timer::reset();
+        if context.should_reset_on_close() {
+            let timer_stopped = match asr::timer::state() {
+                asr::timer::TimerState::Running |
+                asr::timer::TimerState::Paused => false,
+                asr::timer::TimerState::NotRunning |
+                asr::timer::TimerState::Ended |
+                asr::timer::TimerState::Unknown => true,
+                _ => true,
+            };
+            context.timer_reset(timer_stopped);
         }
 
         asr::future::next_tick().await;

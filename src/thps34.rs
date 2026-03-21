@@ -15,7 +15,11 @@ struct State {
 }
 
 impl State {
-    pub fn update(process: &Process, context: &alcatraz_utils::AlcatrazContext, career: &mut alcatraz_utils::CareerState) -> Self {
+    pub fn update(
+        process: &Process,
+        context: &alcatraz_utils::AlcatrazContext,
+        career: &mut alcatraz_utils::CareerState,
+    ) -> Self {
         career.update(process, context);
 
         let thps3state = career.get_tour_state(2);
@@ -114,7 +118,7 @@ impl State {
 
 pub async fn run(process: &Process, process_name: &str, splitter_context: &mut SplitterContext) {
     asr::print_message("Attached to THPS3+4!");
-    asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
+    asr::set_tick_rate(120.0); // just in case, explicitly set the tick rate to 120
 
     splitter_context.update();
 
@@ -123,7 +127,8 @@ pub async fn run(process: &Process, process_name: &str, splitter_context: &mut S
     let context;
     loop {
         asr::print_message("Finding offsets...");
-        let context_result = alcatraz_utils::AlcatrazContext::new(process, base_addr, alcatraz_utils::Game::THPS34);
+        let context_result =
+            alcatraz_utils::AlcatrazContext::new(process, base_addr, alcatraz_utils::Game::THPS34);
         if let Some(ctx) = context_result {
             asr::print_message("Offsets found!");
 
@@ -131,8 +136,8 @@ pub async fn run(process: &Process, process_name: &str, splitter_context: &mut S
 
             context = ctx;
             break;
-        } 
-        
+        }
+
         asr::print_message("Failed to find offsets! Trying again...");
         asr::future::next_tick().await;
     }
@@ -181,12 +186,16 @@ pub async fn run(process: &Process, process_name: &str, splitter_context: &mut S
             asr::print_message(format!("Done Loading").as_str());
         }
 
-        if (current_state.level_name == "Foundry" || current_state.level_name == "College") && prev_state.level_name == "FrontEnd" {
+        if (current_state.level_name == "Foundry" || current_state.level_name == "College")
+            && prev_state.level_name == "FrontEnd"
+        {
             starting_game = true;
             asr::print_message(format!("Starting a game").as_str());
         }
 
-        if starting_game && (current_state.level_name != "Foundry" && current_state.level_name != "College") {
+        if starting_game
+            && (current_state.level_name != "Foundry" && current_state.level_name != "College")
+        {
             starting_game = false;
             asr::print_message(format!("...or not starting a game").as_str());
         }
@@ -202,10 +211,14 @@ pub async fn run(process: &Process, process_name: &str, splitter_context: &mut S
                     pending_split = false;
                     ignore_next_level = false;
                 }
-            },
+            }
             TimerState::Paused | TimerState::Running => {
                 // split on level changes (except frontend)
-                if !starting_game && !current_state.level_name.is_empty() && current_state.level_name != prev_state.level_name && current_state.level_name != "FrontEnd" {
+                if !starting_game
+                    && !current_state.level_name.is_empty()
+                    && current_state.level_name != prev_state.level_name
+                    && current_state.level_name != "FrontEnd"
+                {
                     if !ignore_next_level {
                         splitter_context.timer_split("Changed level");
                     } else {
@@ -215,7 +228,11 @@ pub async fn run(process: &Process, process_name: &str, splitter_context: &mut S
                 }
 
                 // split when second game is started
-                if ((current_state.thps3_stars > 0 && current_state.level_name == "College") || (current_state.thps4_stars > 0 && current_state.level_name == "Foundry")) && starting_game && current_state.is_running {
+                if ((current_state.thps3_stars > 0 && current_state.level_name == "College")
+                    || (current_state.thps4_stars > 0 && current_state.level_name == "Foundry"))
+                    && starting_game
+                    && current_state.is_running
+                {
                     if current_state.gamemode == 0x02 {
                         splitter_context.timer_split("Changed level");
                     }
@@ -223,20 +240,36 @@ pub async fn run(process: &Process, process_name: &str, splitter_context: &mut S
                 }
 
                 // split when all thps3 goals and golds are complete
-                if current_state.thps3_stars > prev_state.thps3_stars && current_state.thps3_stars >= current_state.thps3_clear_prediction {
+                if current_state.thps3_stars > prev_state.thps3_stars
+                    && current_state.thps3_stars >= current_state.thps3_clear_prediction
+                {
                     pending_split = true;
-                    asr::print_message(format!("THPS3 {} star; ready to split...", current_state.thps3_stars).as_str());
+                    asr::print_message(
+                        format!(
+                            "THPS3 {} star; ready to split...",
+                            current_state.thps3_stars
+                        )
+                        .as_str(),
+                    );
                 }
 
                 // split when all thps4 goals and golds are complete
-                if current_state.thps4_stars > prev_state.thps4_stars && current_state.thps4_stars >= current_state.thps4_clear_prediction {
+                if current_state.thps4_stars > prev_state.thps4_stars
+                    && current_state.thps4_stars >= current_state.thps4_clear_prediction
+                {
                     pending_split = true;
-                    asr::print_message(format!("THPS4 {} star; ready to split...", current_state.thps4_stars).as_str());
+                    asr::print_message(
+                        format!(
+                            "THPS4 {} star; ready to split...",
+                            current_state.thps4_stars
+                        )
+                        .as_str(),
+                    );
                 }
 
                 if !current_state.is_running && pending_split {
                     splitter_context.timer_split("Ended run for star");
-                    
+
                     pending_split = false;
                 }
 
@@ -247,7 +280,7 @@ pub async fn run(process: &Process, process_name: &str, splitter_context: &mut S
                     pending_split = false;
                     ignore_next_level = false;
                 }
-            },
+            }
             TimerState::Ended | TimerState::Unknown | _ => {
                 // reset when on frontend with 0 pro points
                 if current_state.level_name == "FrontEnd" && current_state.goal_count == 0 {
@@ -256,7 +289,7 @@ pub async fn run(process: &Process, process_name: &str, splitter_context: &mut S
                     pending_split = false;
                     ignore_next_level = false;
                 }
-            },
+            }
         }
 
         prev_state = current_state;

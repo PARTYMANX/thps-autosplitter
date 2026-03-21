@@ -1,6 +1,6 @@
 use std::u64;
 
-use asr::{Address, Process, timer::TimerState, string::ArrayCString};
+use asr::{string::ArrayCString, timer::TimerState, Address, Process};
 
 use crate::context::SplitterContext;
 
@@ -17,49 +17,69 @@ impl State {
     pub fn update(process: &Process, base_addr: Address) -> Self {
         State {
             has_played_intro: match process.read::<ArrayCString<16>>(base_addr + 0x36A7C8 as u32) {
-                Ok(v) => {
-                    match String::from_utf8(v.as_bytes().to_vec()) {
-                        Ok(v) => v == "Intro_02",
-                        Err(err) => {
-                            asr::print_message(format!("Error reading last cutscene name: {:?}", err).as_str());
-                            false
-                        },
+                Ok(v) => match String::from_utf8(v.as_bytes().to_vec()) {
+                    Ok(v) => v == "Intro_02",
+                    Err(err) => {
+                        asr::print_message(
+                            format!("Error reading last cutscene name: {:?}", err).as_str(),
+                        );
+                        false
                     }
                 },
                 Err(_) => false,
             },
 
-            level_id: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x36A788 as u64, 0x20 as u64, 0x5c4 as u64)) {
+            level_id: match process.read_pointer_path::<u8>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![0x36A788 as u64, 0x20 as u64, 0x5c4 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
 
-            is_career_started: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x36A788 as u64, 0x20 as u64, 0x592 as u64)) {
+            is_career_started: match process.read_pointer_path::<u8>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![0x36A788 as u64, 0x20 as u64, 0x592 as u64],
+            ) {
                 Ok(v) => (v & 0x8) != 0,
                 Err(_) => false,
             },
 
-            _goal_count: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x36A788 as u64, 0x3a8 as u64, 0x24 as u64)) {
+            _goal_count: match process.read_pointer_path::<u8>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![0x36A788 as u64, 0x3a8 as u64, 0x24 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
 
-            chapter: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x36A788 as u64, 0x3a8 as u64, 0x3c as u64)) {
+            chapter: match process.read_pointer_path::<u8>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![0x36A788 as u64, 0x3a8 as u64, 0x3c as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
 
-            is_loading: match process.read_pointer_path::<bool>(base_addr, asr::PointerSize::Bit32, &vec!(0x29851C as u64, 0x24 as u64, 0x174 as u64)) {
+            is_loading: match process.read_pointer_path::<bool>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![0x29851C as u64, 0x24 as u64, 0x174 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => false,
-            }
+            },
         }
     }
 }
 
 pub async fn run(process: &Process, process_name: &str, context: &mut SplitterContext) {
     asr::print_message("Attached to THUG1!");
-    asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
+    asr::set_tick_rate(120.0); // just in case, explicitly set the tick rate to 120
 
     context.update();
 
@@ -104,7 +124,7 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
                 if current_state.has_played_intro && !prev_state.has_played_intro {
                     context.timer_start();
                 }
-            },
+            }
             TimerState::Paused | TimerState::Running => {
                 if !story_flags[0] && current_state.chapter == 3 && current_state.level_id == 2 {
                     context.timer_split("Started Manhattan");
@@ -145,7 +165,7 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
                     context.timer_split("Started Moscow");
                     story_flags[7] = true;
                 }
-                
+
                 if !story_flags[8] && current_state.chapter == 22 && current_state.level_id == 1 {
                     context.timer_split("Started New Jersey 2");
                     story_flags[8] = true;
@@ -171,14 +191,14 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
                     context.timer_reset(false);
                     story_flags.fill(false);
                 }
-            },
+            }
             TimerState::Ended | TimerState::Unknown | _ => {
                 // reset when on main menu with a career not started
                 if current_state.level_id == 0 && !current_state.is_career_started {
                     context.timer_reset(true);
                     story_flags.fill(false);
                 }
-            },
+            }
         }
 
         prev_state = current_state;

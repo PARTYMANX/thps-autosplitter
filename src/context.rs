@@ -12,9 +12,7 @@ impl SplitterContext {
 
         settings.update();
 
-        Self {
-            settings,
-        }
+        Self { settings }
     }
 
     pub fn update(&mut self) {

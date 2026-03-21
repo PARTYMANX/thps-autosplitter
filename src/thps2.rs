@@ -1,4 +1,4 @@
-use asr::{Address, Process, timer::TimerState, time::Duration};
+use asr::{time::Duration, timer::TimerState, Address, Process};
 
 use crate::context::SplitterContext;
 
@@ -54,26 +54,33 @@ impl State {
         let mut goal_count = 0;
 
         // get skater
-        let skater_id = match process.read_pointer_path::<i32>(base_addr, asr::PointerSize::Bit32, &vec!(0x1674b8 as u64, 0x2cc0 as u64)) {
+        let skater_id = match process.read_pointer_path::<i32>(
+            base_addr,
+            asr::PointerSize::Bit32,
+            &vec![0x1674b8 as u64, 0x2cc0 as u64],
+        ) {
             Ok(v) => v,
             Err(_) => -1,
         };
 
-        if skater_id > 0 && skater_id < 15 {    // TODO: figure out secret skaters
+        if skater_id > 0 && skater_id < 15 {
+            // TODO: figure out secret skaters
             let skater_profile = 0x1656cc + (skater_id as u32 * 0x104);
             let medal_offset = skater_profile + 0xc;
 
             for i in 0..13 {
-                let is_comp = match process.read::<bool>(base_addr + 0x139040 + (i * 0x1ac) as u32) {
+                let is_comp = match process.read::<bool>(base_addr + 0x139040 + (i * 0x1ac) as u32)
+                {
                     Ok(v) => v,
                     Err(_) => false,
                 };
 
                 if is_comp {
-                    let medal_flags = match process.read::<u16>(base_addr + medal_offset + (i * 2) as u32) {
-                        Ok(v) => v,
-                        Err(_) => 0,
-                    };
+                    let medal_flags =
+                        match process.read::<u16>(base_addr + medal_offset + (i * 2) as u32) {
+                            Ok(v) => v,
+                            Err(_) => 0,
+                        };
 
                     if (medal_flags & 0x1c00).count_ones() > 0 {
                         medal_count += 1;
@@ -122,7 +129,11 @@ impl State {
             seconds_elapsed: match process.read::<u32>(base_addr + 0x16af80 as u32) {
                 Ok(vblanks) => {
                     if is_timer_running {
-                        let time_end = match process.read_pointer_path::<i32>(base_addr, asr::PointerSize::Bit32, &vec!(0x1674b8 as u64, 0x2cc8 as u64)) {
+                        let time_end = match process.read_pointer_path::<i32>(
+                            base_addr,
+                            asr::PointerSize::Bit32,
+                            &vec![0x1674b8 as u64, 0x2cc8 as u64],
+                        ) {
                             Ok(v) => v,
                             Err(_) => 0,
                         };
@@ -134,11 +145,13 @@ impl State {
                             Err(_) => 0,
                         };
 
-                        let is_comp = match process.read::<bool>(base_addr + 0x139040 + (level_id * 0x1ac) as u32) {
+                        let is_comp = match process
+                            .read::<bool>(base_addr + 0x139040 + (level_id * 0x1ac) as u32)
+                        {
                             Ok(v) => v,
                             Err(_) => false,
                         };
-        
+
                         let max_time = if is_comp {
                             1 * 60 // 1 minutes * 60 seconds
                         } else {
@@ -149,11 +162,15 @@ impl State {
                     } else {
                         0
                     }
-                },
+                }
                 Err(_) => 0,
             },
 
-            timer_end: match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(0x1674b8 as u64, 0x2cc8 as u64)) {
+            timer_end: match process.read_pointer_path::<u32>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![0x1674b8 as u64, 0x2cc8 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
@@ -167,7 +184,7 @@ impl State {
 
 pub async fn run(process: &Process, process_name: &str, context: &mut SplitterContext) {
     asr::print_message("Attached to THPS2!");
-    asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
+    asr::set_tick_rate(120.0); // just in case, explicitly set the tick rate to 120
 
     context.update();
 
@@ -177,7 +194,7 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
     let mut game_done = false;
     let mut level_changed = false;
 
-    let mut igt_accumulator: i64 = 0;   // igt in seconds
+    let mut igt_accumulator: i64 = 0; // igt in seconds
     let mut prev_igt = Duration::seconds(-1);
 
     loop {
@@ -187,7 +204,8 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
         let mut current_state = State::update(process, base_addr);
 
         // if the end of time is changing, don't count any seconds yet because we're in a comp intro (also if the end is in 1 minute we know that's not right and we're starting the comp intro)
-        let is_timer_unstable = current_state.timer_end != prev_state.timer_end || current_state.timer_end == 3630;    
+        let is_timer_unstable =
+            current_state.timer_end != prev_state.timer_end || current_state.timer_end == 3630;
 
         if is_timer_unstable {
             current_state.seconds_elapsed = prev_state.seconds_elapsed;
@@ -199,14 +217,18 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
                     game_done = false;
                 }
 
-                if current_state.mode == 1 && current_state.goal_count == 0 && current_state.level_id == 0 && current_state.is_timer_running {
+                if current_state.mode == 1
+                    && current_state.goal_count == 0
+                    && current_state.level_id == 0
+                    && current_state.is_timer_running
+                {
                     context.timer_start();
                     context.timer_pause_game_time();
-                    
+
                     igt_accumulator = 0;
                     level_changed = false;
                 }
-            },
+            }
             TimerState::Paused | TimerState::Running => {
                 // split on level changes (except going to menu)
                 if current_state.level_id != prev_state.level_id {
@@ -218,7 +240,7 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
                     context.timer_split("Changed levels");
                 }
 
-                // split when all medals collected 
+                // split when all medals collected
                 // TODO: add setting to only split when all goals and goals are collected
                 if !game_done && current_state.medal_count == 3 {
                     game_done = true;
@@ -233,12 +255,15 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
                     context.timer_resume_game_time();
 
                     level_changed = false;
-                    igt_accumulator = 0;    // so igt doesn't stick around
+                    igt_accumulator = 0; // so igt doesn't stick around
                 }
 
                 // calculate igt
                 // commit run's time when either the timer has stopped (run ended) or current time is lower than previous while timer is running
-                if (!current_state.is_timer_running && prev_state.is_timer_running) || (current_state.seconds_elapsed < prev_state.seconds_elapsed && prev_state.is_timer_running) {
+                if (!current_state.is_timer_running && prev_state.is_timer_running)
+                    || (current_state.seconds_elapsed < prev_state.seconds_elapsed
+                        && prev_state.is_timer_running)
+                {
                     igt_accumulator += prev_state.seconds_elapsed as i64;
                 }
 
@@ -253,7 +278,7 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
                     prev_igt = igt_duration;
                     context.timer_set_game_time(igt_duration);
                 }
-            },
+            }
             TimerState::Ended | TimerState::Unknown | _ => {
                 // reset when on a menu and no goals are complete on any skater
                 if current_state.screen != 6 && State::check_for_reset(process, base_addr) {
@@ -263,9 +288,9 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
                     context.timer_resume_game_time();
 
                     level_changed = false;
-                    igt_accumulator = 0;    // so igt doesn't stick around
+                    igt_accumulator = 0; // so igt doesn't stick around
                 }
-            },
+            }
         }
 
         prev_state = current_state;

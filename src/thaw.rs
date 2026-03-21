@@ -1,6 +1,6 @@
-use std::{collections::HashSet, rc::Rc, cell::RefCell};
+use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
-use asr::{Address, Process, signature::Signature, timer::TimerState};
+use asr::{signature::Signature, timer::TimerState, Address, Process};
 
 use crate::context::SplitterContext;
 
@@ -11,8 +11,17 @@ struct Offsets {
 
 impl Offsets {
     pub fn get(process: &Process, base_addr: Address, module_size: u64) -> Self {
-        let skmod_ptr = Signature::<25>::new("a1 ?? ?? ?? ?? 85 c0 75 3d 8a 4c 24 04 84 c9 74 35 6a 01 50 68 9c 00 00 00").scan_process_range(process, (base_addr, module_size)).unwrap() + 1;
-        let load_counter_ptr = Signature::<18>::new("84 c0 75 05 e8 ?? ?? ?? ?? a1 ?? ?? ?? ?? 85 c0 74 13").scan_process_range(process, (base_addr, module_size)).unwrap() + 10;
+        let skmod_ptr = Signature::<25>::new(
+            "a1 ?? ?? ?? ?? 85 c0 75 3d 8a 4c 24 04 84 c9 74 35 6a 01 50 68 9c 00 00 00",
+        )
+        .scan_process_range(process, (base_addr, module_size))
+        .unwrap()
+            + 1;
+        let load_counter_ptr =
+            Signature::<18>::new("84 c0 75 05 e8 ?? ?? ?? ?? a1 ?? ?? ?? ?? 85 c0 74 13")
+                .scan_process_range(process, (base_addr, module_size))
+                .unwrap()
+                + 10;
 
         Offsets {
             skmodule: match process.read::<u32>(skmod_ptr) {
@@ -35,11 +44,19 @@ struct ScriptStruct {
 impl ScriptStruct {
     pub fn read(process: &Process, addr: u32) -> Self {
         Self {
-            _unk: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x0 as u64)) {
+            _unk: match process.read_pointer_path::<u32>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x0 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            phead: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x4 as u64)) {
+            phead: match process.read_pointer_path::<u32>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x4 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
@@ -87,27 +104,51 @@ struct ScriptComponent {
 impl ScriptComponent {
     pub fn read(process: &Process, addr: u32) -> Self {
         Self {
-            _unk: match process.read_pointer_path::<u8>(addr, asr::PointerSize::Bit32, &vec!(0x0 as u64)) {
+            _unk: match process.read_pointer_path::<u8>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x0 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            ttype: match process.read_pointer_path::<u8>(addr, asr::PointerSize::Bit32, &vec!(0x1 as u64)) {
+            ttype: match process.read_pointer_path::<u8>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x1 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            _size: match process.read_pointer_path::<u16>(addr, asr::PointerSize::Bit32, &vec!(0x2 as u64)) {
+            _size: match process.read_pointer_path::<u16>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x2 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            name: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x4 as u64)) {
+            name: match process.read_pointer_path::<u32>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x4 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            data: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x8 as u64)) {
+            data: match process.read_pointer_path::<u32>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x8 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            pnext: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0xc as u64)) {
+            pnext: match process.read_pointer_path::<u32>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0xc as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
@@ -144,7 +185,8 @@ fn read_goal(process: &Process, addr: u32) -> Option<Goal> {
     while comp != 0 {
         let component = ScriptComponent::read(process, comp);
 
-        if component.name == 0x49807745 {   // "hasBeaten"
+        if component.name == 0x49807745 {
+            // "hasBeaten"
             if component.data == 1 {
                 complete = true;
             }
@@ -171,7 +213,7 @@ fn read_goal(process: &Process, addr: u32) -> Option<Goal> {
     }
 
     if !matches!(mode, Gamemode::NONE) {
-        Some (Goal {
+        Some(Goal {
             mode,
             complete,
             _is_locked,
@@ -184,7 +226,7 @@ fn read_goal(process: &Process, addr: u32) -> Option<Goal> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)] 
+#[derive(Debug, PartialEq, Eq)]
 enum Difficulty {
     UNKNOWN,
     EASY,
@@ -198,7 +240,8 @@ fn read_difficulty_levels(process: &Process, addr: u32, state: &mut State) {
     while comp != 0 {
         let component = ScriptComponent::read(process, comp);
 
-        if component.name == 0x4da4937b {   // "career"
+        if component.name == 0x4da4937b {
+            // "career"
             if component.data == 0 {
                 state.story_difficulty = Difficulty::EASY;
             } else if component.data == 1 {
@@ -206,7 +249,8 @@ fn read_difficulty_levels(process: &Process, addr: u32, state: &mut State) {
             } else if component.data == 2 {
                 state.story_difficulty = Difficulty::SICK;
             }
-        } else if component.name == 0x4C10DE52 {    // "classic"
+        } else if component.name == 0x4C10DE52 {
+            // "classic"
             if component.data == 0 {
                 state.classic_difficulty = Difficulty::NORMAL;
             } else if component.data == 1 {
@@ -224,7 +268,8 @@ fn read_goal_params(process: &Process, addr: u32, state: &mut State) {
     while comp != 0 {
         let component = ScriptComponent::read(process, comp);
 
-        if component.name == 0xb13d98d3 {   // "difficulty_levels"
+        if component.name == 0xb13d98d3 {
+            // "difficulty_levels"
             read_difficulty_levels(process, component.data, state);
         }
 
@@ -238,11 +283,15 @@ fn update_goal_flags(process: &Process, addr: u32, state: &mut State) {
     while comp != 0 {
         let component = ScriptComponent::read(process, comp);
 
-        if component.name == 0x23d4170a {   // "goalmanager_params"
+        if component.name == 0x23d4170a {
+            // "goalmanager_params"
             read_goal_params(process, component.data, state);
         } else if component.ttype >> 1 == 0xa {
             if let Some(goal) = read_goal(process, component.data) {
-                if goal.complete && goal.unk2 == 1 && state.completed_goals.borrow_mut().insert(component.name) {
+                if goal.complete
+                    && goal.unk2 == 1
+                    && state.completed_goals.borrow_mut().insert(component.name)
+                {
                     if matches!(goal.mode, Gamemode::CAREER) {
                         state.story_goals += 1;
                     } else {
@@ -269,15 +318,27 @@ struct GoalListNode {
 impl GoalListNode {
     pub fn read(process: &Process, addr: u32) -> Self {
         Self {
-            name: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x0 as u64)) {
+            name: match process.read_pointer_path::<u32>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x0 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            pgoal: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x4 as u64)) {
+            pgoal: match process.read_pointer_path::<u32>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x4 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            pnext: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x8 as u64)) {
+            pnext: match process.read_pointer_path::<u32>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x8 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
@@ -296,23 +357,43 @@ struct GoalList {
 impl GoalList {
     pub fn read(process: &Process, addr: u32) -> Self {
         Self {
-            num: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x0 as u64)) {
+            num: match process.read_pointer_path::<u32>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x0 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            phead: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x4 as u64)) {
+            phead: match process.read_pointer_path::<u32>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x4 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            _ptail: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x8 as u64)) {
+            _ptail: match process.read_pointer_path::<u32>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x8 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            _pcurrent: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0xc as u64)) {
+            _pcurrent: match process.read_pointer_path::<u32>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0xc as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            _idx: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x10 as u64)) {
+            _idx: match process.read_pointer_path::<u32>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x10 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
@@ -339,12 +420,20 @@ fn update_goals(process: &Process, addr: u32, state: &mut State) {
     let mut pnode = goal_list.phead;
     for _ in 0..goal_list.num {
         let node = GoalListNode::read(process, pnode);
-        if let Ok(flags) = process.read_pointer_path::<u32>(node.pgoal, asr::PointerSize::Bit32, &vec!(0x68 as u64)) {
+        if let Ok(flags) = process.read_pointer_path::<u32>(
+            node.pgoal,
+            asr::PointerSize::Bit32,
+            &vec![0x68 as u64],
+        ) {
             if flags & 0x4 != 0 {
                 if !state.completed_goals.borrow().contains(&node.name) {
                     let mut is_leaf = false;
 
-                    if let Ok(parent) = process.read_pointer_path::<u32>(node.pgoal, asr::PointerSize::Bit32, &vec!(0x28 as u64, 0x0 as u64))  {
+                    if let Ok(parent) = process.read_pointer_path::<u32>(
+                        node.pgoal,
+                        asr::PointerSize::Bit32,
+                        &vec![0x28 as u64, 0x0 as u64],
+                    ) {
                         if parent == 0 {
                             state.completed_goals.borrow_mut().insert(node.name);
                             is_leaf = true;
@@ -363,8 +452,8 @@ fn update_goals(process: &Process, addr: u32, state: &mut State) {
                     }
                 }
             } //else if flags & 0x20 != 0 {
-            //    state.locked_goals.borrow_mut().insert(node.name);
-            //}
+              //    state.locked_goals.borrow_mut().insert(node.name);
+              //}
 
             if flags & 0x100 != 0 {
                 state.run_is_active = true;
@@ -391,12 +480,20 @@ struct State {
 impl State {
     pub fn update(process: &Process, base_addr: Address, offsets: &Offsets) -> Self {
         let mut result = Self {
-            level_id: match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(offsets.skmodule as u64, 0x20 as u64, 0xb0 as u64)) {
+            level_id: match process.read_pointer_path::<u32>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![offsets.skmodule as u64, 0x20 as u64, 0xb0 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
 
-            load_counter: match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(offsets.load_counter as u64)) {
+            load_counter: match process.read_pointer_path::<u32>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![offsets.load_counter as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
@@ -409,17 +506,29 @@ impl State {
             classic_difficulty: Difficulty::UNKNOWN,
             story_difficulty: Difficulty::UNKNOWN,
 
-            session_goals: match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(offsets.skmodule as u64, 0x78 as u64, 0x38 as u64)) {
+            session_goals: match process.read_pointer_path::<u32>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![offsets.skmodule as u64, 0x78 as u64, 0x38 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
         };
 
-        if let Ok(addr) = process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(offsets.skmodule as u64, 0x78 as u64)) {
+        if let Ok(addr) = process.read_pointer_path::<u32>(
+            base_addr,
+            asr::PointerSize::Bit32,
+            &vec![offsets.skmodule as u64, 0x78 as u64],
+        ) {
             update_goals(process, addr, &mut result);
         }
 
-        if let Ok(addr) = process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(offsets.skmodule as u64, 0x78 as u64, 0x14 as u64)) {
+        if let Ok(addr) = process.read_pointer_path::<u32>(
+            base_addr,
+            asr::PointerSize::Bit32,
+            &vec![offsets.skmodule as u64, 0x78 as u64, 0x14 as u64],
+        ) {
             update_goal_flags(process, addr, &mut result);
         }
 
@@ -434,18 +543,12 @@ static RANCH_GOALS: [u32; 3] = [
 ];
 
 static CASINO_GOALS: [u32; 7] = [
-    0x8c0507e5,
-    0x419fe6b0,
-    0x9b9cd093,
-    0x4829aa9b,
-    0x3f2e9a0d,
-    0xd120fb21,
-    0xd67b166d,
+    0x8c0507e5, 0x419fe6b0, 0x9b9cd093, 0x4829aa9b, 0x3f2e9a0d, 0xd120fb21, 0xd67b166d,
 ];
 
 pub async fn run(process: &Process, process_name: &str, context: &mut SplitterContext) {
     asr::print_message("Attached to THAW!");
-    asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
+    asr::set_tick_rate(120.0); // just in case, explicitly set the tick rate to 120
 
     asr::print_message("");
     asr::print_message("In memory of Coop");
@@ -474,7 +577,7 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
         false, // east la unlocked (black widowz goal) (complete 0xda77ca92)
         false, // pro goals started (joey b baggie) (complete 0x97e3e2cf)
         false, // casino unlocked (paid taco truck) (complete 0x82510d90)
-        false, // final goal unlocked (completed x casino goals) 
+        false, // final goal unlocked (completed x casino goals)
         false, // final goal complete (complete 0x99156422)
     ];
 
@@ -484,14 +587,14 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
         // update vars
         let current_state = State::update(process, base_addr, &offsets);
 
-        // sometimes the read of goal flags fails and causes a bunch of goals to re-complete  
+        // sometimes the read of goal flags fails and causes a bunch of goals to re-complete
         // to avoid that, just copy previous progress if session goals hasn't changed but the others have
-        if (current_state.story_goals != prev_state.story_goals || 
-            current_state.classic_goals != prev_state.classic_goals) &&
-            current_state.session_goals == prev_state.session_goals {
-
+        if (current_state.story_goals != prev_state.story_goals
+            || current_state.classic_goals != prev_state.classic_goals)
+            && current_state.session_goals == prev_state.session_goals
+        {
             asr::print_message(&format!("WARNING: goal flags failed to read!"));
-            
+
             for i in prev_state.completed_goals.borrow().iter() {
                 current_state.completed_goals.borrow_mut().insert(*i);
             }
@@ -528,22 +631,28 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
                 }
 
                 // start story when level == 1, no goals are complete, and goal is active
-                if current_state.level_id == 1 && current_state.story_goals == 0 && current_state.run_is_active {
+                if current_state.level_id == 1
+                    && current_state.story_goals == 0
+                    && current_state.run_is_active
+                {
                     context.timer_start();
                     asr::print_message(&format!("Playing Story..."));
                     mode = Gamemode::CAREER;
                 }
 
                 // start classic when level == 11 from menu
-                if current_state.level_id == 11 && prev_state.level_id == 0 && current_state.classic_goals == 0 {
+                if current_state.level_id == 11
+                    && prev_state.level_id == 0
+                    && current_state.classic_goals == 0
+                {
                     context.timer_start();
                     asr::print_message(&format!("Playing Classic..."));
                     mode = Gamemode::CLASSIC;
                 }
-            },
+            }
             TimerState::Paused | TimerState::Running => {
                 match mode {
-                    Gamemode::NONE => {},
+                    Gamemode::NONE => {}
                     Gamemode::CAREER => {
                         if is_paused {
                             is_paused = false;
@@ -552,7 +661,10 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
                         }
 
                         // split on unlock or visit beverly hills
-                        if !story_flags[0] && (completed_goals.contains(&0x7a446a0a) || (current_state.level_id == 2 && prev_state.level_id != 2)) {
+                        if !story_flags[0]
+                            && (completed_goals.contains(&0x7a446a0a)
+                                || (current_state.level_id == 2 && prev_state.level_id != 2))
+                        {
                             context.timer_split("Unlocked or skipped to Beverly Hills");
                             story_flags[0] = true;
                         }
@@ -668,12 +780,14 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
                             context.timer_reset(false);
                             story_flags.fill(false);
                         }
-                    },
+                    }
                     Gamemode::CLASSIC => {
                         if current_state.load_counter > 0 && !is_paused {
                             is_paused = true;
                             context.timer_pause_game_time();
-                            asr::print_message(format!("Starting Load... {}", current_state.load_counter).as_str());
+                            asr::print_message(
+                                format!("Starting Load... {}", current_state.load_counter).as_str(),
+                            );
                         } else if current_state.load_counter == 0 && is_paused {
                             is_paused = false;
                             context.timer_resume_game_time();
@@ -681,12 +795,18 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
                         }
 
                         // split on level changes (except main menu)
-                        if current_state.level_id != prev_state.level_id && current_state.level_id != 0 {
+                        if current_state.level_id != prev_state.level_id
+                            && current_state.level_id != 0
+                        {
                             context.timer_split("Changed level");
                         }
 
                         // split on end run when 51 goals are complete
-                        if current_state.classic_goals >= 51 && !current_state.run_is_active && prev_state.run_is_active {  // FIXME: goes off when restarting
+                        if current_state.classic_goals >= 51
+                            && !current_state.run_is_active
+                            && prev_state.run_is_active
+                        {
+                            // FIXME: goes off when restarting
                             context.timer_split("Completed Classic Mode");
                         }
 
@@ -694,27 +814,27 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
                         if current_state.level_id == 0 && current_state.classic_goals == 0 {
                             context.timer_reset(false);
                         }
-                    },
+                    }
                 }
-            },
+            }
             TimerState::Ended | TimerState::Unknown | _ => {
                 match mode {
-                    Gamemode::NONE => {},
+                    Gamemode::NONE => {}
                     Gamemode::CAREER => {
                         // reset on 0 goals complete on menu
                         if current_state.level_id == 0 && current_state.story_goals == 0 {
                             context.timer_reset(true);
                             story_flags.fill(false);
                         }
-                    },
+                    }
                     Gamemode::CLASSIC => {
                         // reset on 0 goals complete on menu
                         if current_state.level_id == 0 && current_state.classic_goals == 0 {
                             context.timer_reset(true);
                         }
-                    },
+                    }
                 }
-            },
+            }
         }
 
         prev_state = current_state;

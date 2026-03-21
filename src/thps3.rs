@@ -1,4 +1,4 @@
-use asr::{Address, Process, timer::TimerState};
+use asr::{timer::TimerState, Address, Process};
 
 use crate::context::SplitterContext;
 
@@ -20,17 +20,8 @@ struct State {
 }
 
 const LEVEL_COUNT: u32 = 9;
-const LEVEL_IS_COMP: [bool; LEVEL_COUNT as usize] = [
-    false,
-    false,
-    true,
-    false,
-    false,
-    true,
-    false,
-    true,
-    false,
-];
+const LEVEL_IS_COMP: [bool; LEVEL_COUNT as usize] =
+    [false, false, true, false, false, true, false, true, false];
 
 impl State {
     fn get_goal_count(process: &Process, base_addr: Address) -> u32 {
@@ -38,9 +29,18 @@ impl State {
 
         for i in 0..LEVEL_COUNT {
             if !LEVEL_IS_COMP[i as usize] {
-                match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(0x4e1e90 as u64, 0x134 as u64, 0x14 as u64, (0x564 + (i * 8)) as u64)) {
+                match process.read_pointer_path::<u32>(
+                    base_addr,
+                    asr::PointerSize::Bit32,
+                    &vec![
+                        0x4e1e90 as u64,
+                        0x134 as u64,
+                        0x14 as u64,
+                        (0x564 + (i * 8)) as u64,
+                    ],
+                ) {
                     Ok(v) => result += v.count_ones(),
-                    Err(_) => {}    // do nothing, we either lost the process or don't have a career initialized
+                    Err(_) => {} // do nothing, we either lost the process or don't have a career initialized
                 }
             }
         }
@@ -54,7 +54,16 @@ impl State {
 
         for i in 0..LEVEL_COUNT {
             if LEVEL_IS_COMP[i as usize] {
-                match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(0x4e1e90 as u64, 0x134 as u64, 0x14 as u64, (0x564 + (i * 8)) as u64)) {
+                match process.read_pointer_path::<u32>(
+                    base_addr,
+                    asr::PointerSize::Bit32,
+                    &vec![
+                        0x4e1e90 as u64,
+                        0x134 as u64,
+                        0x14 as u64,
+                        (0x564 + (i * 8)) as u64,
+                    ],
+                ) {
                     Ok(v) => {
                         if v != 0 {
                             num_medals += 1;
@@ -65,7 +74,7 @@ impl State {
                             _ => 0,
                         };
                     }
-                    Err(_) => {}    // do nothing, we either lost the process or don't have a career initialized
+                    Err(_) => {} // do nothing, we either lost the process or don't have a career initialized
                 }
             }
         }
@@ -78,10 +87,14 @@ impl State {
 
         State {
             goal_count: Self::get_goal_count(process, base_addr),
-            medal_count, 
+            medal_count,
             gold_count,
 
-            level_id: match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(0x4e1e90 as u64, 0x134 as u64, 0x14 as u64, 0x690 as u64)) {
+            level_id: match process.read_pointer_path::<u32>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![0x4e1e90 as u64, 0x134 as u64, 0x14 as u64, 0x690 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
@@ -101,12 +114,20 @@ impl State {
                 Err(_) => false,
             },
 
-            comp_ranking: match process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(0x4e1e90 as u64, 0x45c as u64, 0x160 as u64)) {
+            comp_ranking: match process.read_pointer_path::<u32>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![0x4e1e90 as u64, 0x45c as u64, 0x160 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
 
-            comp_is_over: match process.read_pointer_path::<bool>(base_addr, asr::PointerSize::Bit32, &vec!(0x4e1e90 as u64, 0x45c as u64, 0x15c as u64)) {
+            comp_is_over: match process.read_pointer_path::<bool>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![0x4e1e90 as u64, 0x45c as u64, 0x15c as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => false,
             },
@@ -116,7 +137,7 @@ impl State {
 
 pub async fn run(process: &Process, process_name: &str, context: &mut SplitterContext) {
     asr::print_message("Attached to THPS3!");
-    asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
+    asr::set_tick_rate(120.0); // just in case, explicitly set the tick rate to 120
 
     context.update();
 
@@ -148,7 +169,11 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
         }
 
         // comp round and placing may be incorrect when starting tokyo, so store when we see the comp start. essentially this tracks initialization
-        if !tokyo_started && current_state.level_id == 8 && !current_state.comp_is_over && current_state.medal_count < 3 {
+        if !tokyo_started
+            && current_state.level_id == 8
+            && !current_state.comp_is_over
+            && current_state.medal_count < 3
+        {
             asr::print_message(format!("Tokyo started!").as_str());
             tokyo_started = true;
         }
@@ -162,36 +187,59 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
             tokyo_complete = false;
         }
 
-        if (current_state.goal_count != prev_state.goal_count || current_state.gold_count != prev_state.gold_count) && current_state.goal_count == 54 && current_state.gold_count == 3 {
+        if (current_state.goal_count != prev_state.goal_count
+            || current_state.gold_count != prev_state.gold_count)
+            && current_state.goal_count == 54
+            && current_state.gold_count == 3
+        {
             all_goals_and_golds_complete = true;
         }
 
-        if all_goals_and_golds_complete && (current_state.goal_count != 54 || current_state.gold_count != 3) {
+        if all_goals_and_golds_complete
+            && (current_state.goal_count != 54 || current_state.gold_count != 3)
+        {
             all_goals_and_golds_complete = false;
         }
 
         match asr::timer::state() {
             TimerState::NotRunning => {
                 // can't split on level change, so store that it had changed
-                if current_state.level_id == 1 && prev_state.level_id == 0 && current_state.goal_count == 0 {
+                if current_state.level_id == 1
+                    && prev_state.level_id == 0
+                    && current_state.goal_count == 0
+                {
                     foundry_started = true;
                 }
 
                 // when goal cams end, start timer
-                if foundry_started && !current_state.is_loading && !current_state.is_paused && current_state.is_timer_running {
+                if foundry_started
+                    && !current_state.is_loading
+                    && !current_state.is_paused
+                    && current_state.is_timer_running
+                {
                     context.timer_start();
                 }
-            },
+            }
             TimerState::Paused | TimerState::Running => {
                 // split on level changes (except skateshop and tokyo to cruise ship, since that's handled when the comp ends)
-                if current_state.level_id != prev_state.level_id && current_state.level_id != 0 && prev_state.level_id != 8 && current_state.level_id != 9 {
+                if current_state.level_id != prev_state.level_id
+                    && current_state.level_id != 0
+                    && prev_state.level_id != 8
+                    && current_state.level_id != 9
+                {
                     context.timer_split("Changed level");
                 }
 
                 // any% end (end of medal run on tokyo)
-                // NOTE: the check is if we're on tokyo, the competition class is initialized, the competition is over, we're in at least 3rd place. 
+                // NOTE: the check is if we're on tokyo, the competition class is initialized, the competition is over, we're in at least 3rd place.
                 // because this has been inconsistent in the past, the medal check is a backup if that fails.  the medal count is only updated after the ceremony, so it's going to be late for splitting
-                if !tokyo_complete && ((current_state.level_id == 8 && tokyo_started && current_state.comp_is_over && current_state.comp_ranking <= 3) || current_state.medal_count == 3) {
+                if !tokyo_complete
+                    && ((current_state.level_id == 8
+                        && tokyo_started
+                        && current_state.comp_is_over
+                        && current_state.comp_ranking <= 3)
+                        || current_state.medal_count == 3)
+                {
                     tokyo_complete = true;
                     context.timer_split("Finished Tokyo");
                 }
@@ -206,13 +254,13 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
                 if current_state.level_id == 0 && current_state.goal_count == 0 {
                     context.timer_reset(false);
                 }
-            },
+            }
             TimerState::Ended | TimerState::Unknown | _ => {
                 // reset when in skateshop with no goals complete
                 if current_state.level_id == 0 && current_state.goal_count == 0 {
                     context.timer_reset(true);
                 }
-            },
+            }
         }
 
         prev_state = current_state;

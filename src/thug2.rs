@@ -1,4 +1,4 @@
-use asr::{Address, Process, timer::TimerState};
+use asr::{timer::TimerState, Address, Process};
 
 use crate::context::SplitterContext;
 
@@ -23,11 +23,19 @@ struct ScriptStruct {
 impl ScriptStruct {
     pub fn read(process: &Process, addr: u32) -> Self {
         Self {
-            _unk: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x0 as u64)) {
+            _unk: match process.read_pointer_path::<u32>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x0 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            phead: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x4 as u64)) {
+            phead: match process.read_pointer_path::<u32>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x4 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
@@ -47,27 +55,51 @@ struct ScriptComponent {
 impl ScriptComponent {
     pub fn read(process: &Process, addr: u32) -> Self {
         Self {
-            _unk: match process.read_pointer_path::<u8>(addr, asr::PointerSize::Bit32, &vec!(0x0 as u64)) {
+            _unk: match process.read_pointer_path::<u8>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x0 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            _ttype: match process.read_pointer_path::<u8>(addr, asr::PointerSize::Bit32, &vec!(0x1 as u64)) {
+            _ttype: match process.read_pointer_path::<u8>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x1 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            _size: match process.read_pointer_path::<u16>(addr, asr::PointerSize::Bit32, &vec!(0x2 as u64)) {
+            _size: match process.read_pointer_path::<u16>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x2 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            name: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x4 as u64)) {
+            name: match process.read_pointer_path::<u32>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x4 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            data: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0x8 as u64)) {
+            data: match process.read_pointer_path::<u32>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0x8 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
-            pnext: match process.read_pointer_path::<u32>(addr, asr::PointerSize::Bit32, &vec!(0xc as u64)) {
+            pnext: match process.read_pointer_path::<u32>(
+                addr,
+                asr::PointerSize::Bit32,
+                &vec![0xc as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
@@ -75,7 +107,7 @@ impl ScriptComponent {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)] 
+#[derive(Debug, PartialEq, Eq)]
 enum Difficulty {
     UNKNOWN,
     EASY,
@@ -91,7 +123,8 @@ fn read_difficulty_levels(process: &Process, addr: u32) -> (Difficulty, Difficul
     while comp != 0 {
         let component = ScriptComponent::read(process, comp);
 
-        if component.name == 0x4da4937b {   // "career"
+        if component.name == 0x4da4937b {
+            // "career"
             if component.data == 0 {
                 story_difficulty = Difficulty::EASY;
             } else if component.data == 1 {
@@ -99,7 +132,8 @@ fn read_difficulty_levels(process: &Process, addr: u32) -> (Difficulty, Difficul
             } else if component.data == 2 {
                 story_difficulty = Difficulty::SICK;
             }
-        } else if component.name == 0x4C10DE52 {    // "classic"
+        } else if component.name == 0x4C10DE52 {
+            // "classic"
             if component.data == 0 {
                 classic_difficulty = Difficulty::NORMAL;
             } else if component.data == 1 {
@@ -120,7 +154,8 @@ fn read_goal_params(process: &Process, addr: u32) -> (Difficulty, Difficulty) {
     while comp != 0 {
         let component = ScriptComponent::read(process, comp);
 
-        if component.name == 0xb13d98d3 {   // "difficulty_levels"
+        if component.name == 0xb13d98d3 {
+            // "difficulty_levels"
             result = read_difficulty_levels(process, component.data);
         }
 
@@ -137,23 +172,24 @@ fn get_difficulties(process: &Process, addr: u32) -> (Difficulty, Difficulty) {
     while comp != 0 {
         let component = ScriptComponent::read(process, comp);
 
-        if component.name == 0x23d4170a {   // "goalmanager_params"
+        if component.name == 0x23d4170a {
+            // "goalmanager_params"
             result = read_goal_params(process, component.data);
         } /*else if component.ttype >> 1 == 0xa {
-            if let Some(goal) = read_goal(process, component.data) {
-                if goal.complete && goal.unk2 == 1 && state.completed_goals.borrow_mut().insert(component.name) {
-                    if matches!(goal.mode, Gamemode::CAREER) {
-                        state.story_goals += 1;
-                    } else {
-                        state.classic_goals += 1;
-                    }
-                }
+              if let Some(goal) = read_goal(process, component.data) {
+                  if goal.complete && goal.unk2 == 1 && state.completed_goals.borrow_mut().insert(component.name) {
+                      if matches!(goal.mode, Gamemode::CAREER) {
+                          state.story_goals += 1;
+                      } else {
+                          state.classic_goals += 1;
+                      }
+                  }
 
-                //if goal.is_locked {
-                //    state.locked_goals.borrow_mut().insert(component.name);
-                //}
-            }
-        }*/
+                  //if goal.is_locked {
+                  //    state.locked_goals.borrow_mut().insert(component.name);
+                  //}
+              }
+          }*/
 
         comp = component.pnext;
     }
@@ -163,49 +199,86 @@ fn get_difficulties(process: &Process, addr: u32) -> (Difficulty, Difficulty) {
 
 impl State {
     pub fn update(process: &Process, base_addr: Address) -> Self {
-        let (_story_difficulty, classic_difficulty) = if let Ok(addr) = process.read_pointer_path::<u32>(base_addr, asr::PointerSize::Bit32, &vec!(0x3ce478 as u64, 0x38c as u64, 0x14 as u64)) {
+        let (_story_difficulty, classic_difficulty) = if let Ok(addr) = process
+            .read_pointer_path::<u32>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![0x3ce478 as u64, 0x38c as u64, 0x14 as u64],
+            ) {
             get_difficulties(process, addr)
         } else {
             (Difficulty::UNKNOWN, Difficulty::UNKNOWN)
         };
 
         State {
-            level_id: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x3ce478 as u64, 0x20 as u64, 0x630 as u64)) {
+            level_id: match process.read_pointer_path::<u8>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![0x3ce478 as u64, 0x20 as u64, 0x630 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
 
-            is_game_finished: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x3ce478 as u64, 0x20 as u64, 0x610 as u64)) {
+            is_game_finished: match process.read_pointer_path::<u8>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![0x3ce478 as u64, 0x20 as u64, 0x610 as u64],
+            ) {
                 Ok(v) => v & 0x40 != 0,
                 Err(_) => false,
             },
 
-            total_classic_goals: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x3ce478 as u64, 0x20 as u64, 0x5EE as u64)) {
+            total_classic_goals: match process.read_pointer_path::<u8>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![0x3ce478 as u64, 0x20 as u64, 0x5EE as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
 
-            classic_triangle_goals: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x3ce478 as u64, 0x20 as u64, 0x5E4 as u64)) {
+            classic_triangle_goals: match process.read_pointer_path::<u8>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![0x3ce478 as u64, 0x20 as u64, 0x5E4 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
 
-            is_run_ended: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x2F3624 as u64, 0x1A18 as u64, 0xC as u64)) {
+            is_run_ended: match process.read_pointer_path::<u8>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![0x2F3624 as u64, 0x1A18 as u64, 0xC as u64],
+            ) {
                 Ok(v) => v != 0,
                 Err(_) => false,
             },
 
-            is_loading: match process.read_pointer_path::<bool>(base_addr, asr::PointerSize::Bit32, &vec!(0x2FC49C as u64)) {
+            is_loading: match process.read_pointer_path::<bool>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![0x2FC49C as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => false,
             },
 
-            is_story_started: match process.read_pointer_path::<u8>(base_addr, asr::PointerSize::Bit32, &vec!(0x3ce478 as u64, 0x20 as u64, 0x634 as u64)) {
+            is_story_started: match process.read_pointer_path::<u8>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![0x3ce478 as u64, 0x20 as u64, 0x634 as u64],
+            ) {
                 Ok(v) => v & 0x1 != 0,
                 Err(_) => false,
             },
 
-            story_points: match process.read_pointer_path::<u16>(base_addr, asr::PointerSize::Bit32, &vec!(0x3ce478 as u64, 0x20 as u64, 0x5d8 as u64)) {
+            story_points: match process.read_pointer_path::<u16>(
+                base_addr,
+                asr::PointerSize::Bit32,
+                &vec![0x3ce478 as u64, 0x20 as u64, 0x5d8 as u64],
+            ) {
                 Ok(v) => v,
                 Err(_) => 0,
             },
@@ -224,7 +297,7 @@ enum Gamemode {
 
 pub async fn run(process: &Process, process_name: &str, context: &mut SplitterContext) {
     asr::print_message("Attached to THUG2!");
-    asr::set_tick_rate(120.0);  // just in case, explicitly set the tick rate to 120
+    asr::set_tick_rate(120.0); // just in case, explicitly set the tick rate to 120
 
     context.update();
 
@@ -241,7 +314,9 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
         let current_state = State::update(process, base_addr);
 
         if current_state.story_points != prev_state.story_points {
-            asr::print_message(format!("Story points changed to {}", current_state.story_points).as_str());
+            asr::print_message(
+                format!("Story points changed to {}", current_state.story_points).as_str(),
+            );
         }
 
         // pause game time when loading, resume when done
@@ -262,39 +337,55 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
                     mode = Gamemode::CAREER;
                 }
                 // classic
-                if current_state.level_id == 2 && prev_state.level_id == 0 && current_state.total_classic_goals == 0 {
+                if current_state.level_id == 2
+                    && prev_state.level_id == 0
+                    && current_state.total_classic_goals == 0
+                {
                     context.timer_start();
                     asr::print_message(format!("Playing classic mode!").as_str());
                     mode = Gamemode::CLASSIC;
                 }
-            },
+            }
             TimerState::Paused | TimerState::Running => {
                 match mode {
-                    Gamemode::NONE => {},
+                    Gamemode::NONE => {}
                     Gamemode::CAREER => {
-                        if current_state.level_id != 0 && current_state.level_id != prev_state.level_id {
+                        if current_state.level_id != 0
+                            && current_state.level_id != prev_state.level_id
+                        {
                             context.timer_split("Changed level");
-                        } 
-                        
+                        }
+
                         if current_state.is_game_finished && !prev_state.is_game_finished {
                             context.timer_split("Final cutscene");
                         }
-        
+
                         // reset when story start flag is unset
-                        if current_state.level_id == 0 && !current_state.is_story_started && current_state.story_points == 0 {
+                        if current_state.level_id == 0
+                            && !current_state.is_story_started
+                            && current_state.story_points == 0
+                        {
                             context.timer_reset(false);
                             mode = Gamemode::NONE;
                         }
-                    },
+                    }
                     Gamemode::CLASSIC => {
-                        if current_state.level_id != 0 && current_state.level_id != prev_state.level_id {
+                        if current_state.level_id != 0
+                            && current_state.level_id != prev_state.level_id
+                        {
                             context.timer_split("Changed level");
-                        } 
+                        }
 
-                        if current_state.is_run_ended && !prev_state.is_run_ended && 
-                            ((current_state.total_classic_goals < 120 && current_state.classic_difficulty == Difficulty::NORMAL && current_state.classic_triangle_goals >= 6) || 
-                            (current_state.total_classic_goals < 120 && current_state.classic_difficulty == Difficulty::SICK && current_state.classic_triangle_goals >= 8) || 
-                            (current_state.total_classic_goals == 140)) {
+                        if current_state.is_run_ended
+                            && !prev_state.is_run_ended
+                            && ((current_state.total_classic_goals < 120
+                                && current_state.classic_difficulty == Difficulty::NORMAL
+                                && current_state.classic_triangle_goals >= 6)
+                                || (current_state.total_classic_goals < 120
+                                    && current_state.classic_difficulty == Difficulty::SICK
+                                    && current_state.classic_triangle_goals >= 8)
+                                || (current_state.total_classic_goals == 140))
+                        {
                             context.timer_split("End of classic mode")
                         }
 
@@ -303,29 +394,31 @@ pub async fn run(process: &Process, process_name: &str, context: &mut SplitterCo
                             context.timer_reset(false);
                             mode = Gamemode::NONE;
                         }
-                    },
+                    }
                 }
-                
-            },
+            }
             TimerState::Ended | TimerState::Unknown | _ => {
                 match mode {
-                    Gamemode::NONE => {},
+                    Gamemode::NONE => {}
                     Gamemode::CAREER => {
                         // reset when story start flag is unset
-                        if current_state.level_id == 0 && !current_state.is_story_started && current_state.story_points == 0 {
+                        if current_state.level_id == 0
+                            && !current_state.is_story_started
+                            && current_state.story_points == 0
+                        {
                             context.timer_reset(true);
                             mode = Gamemode::NONE;
                         }
-                    },
+                    }
                     Gamemode::CLASSIC => {
                         // reset when on 0 goals are completed
                         if current_state.level_id == 0 && prev_state.total_classic_goals == 0 {
                             context.timer_reset(true);
                             mode = Gamemode::NONE;
                         }
-                    },
+                    }
                 }
-            },
+            }
         }
 
         prev_state = current_state;

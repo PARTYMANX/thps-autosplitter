@@ -1,11 +1,11 @@
-use std::collections::HashMap;
 use once_cell::sync::Lazy;
+use std::collections::HashMap;
 
 pub enum GoalType {
     Normal,
     Medal,
-    GoldMedal,  // makes tracking golds a bit easier
-    Pro,    // encompasses pro goals and competition platinums
+    GoldMedal, // makes tracking golds a bit easier
+    Pro,       // encompasses pro goals and competition platinums
 }
 
 // constructs a hash table of every goal in the game to translate from a name to a position in our own career table
@@ -19,7 +19,7 @@ pub static GOAL_TABLE: Lazy<HashMap<&str, (u32, u32, u32, GoalType)>> = Lazy::ne
     table
 });
 
-// list of all goals, in the format (name, (tour, level, index)) 
+// list of all goals, in the format (name, (tour, level, index))
 // includes all games because i suspect they might merge them someday
 const GOAL_LIST: [(&str, (u32, u32, u32, GoalType)); 399] = [
     // THPS1
@@ -234,7 +234,7 @@ const GOAL_LIST: [(&str, (u32, u32, u32, GoalType)); 399] = [
     ("/Game/Environments/THPS3/Suburbia/Goals/Data/suburbia_trick_ManualTheSac.suburbia_trick_ManualTheSac", (2, 3, 12, GoalType::Pro)),
     ("/Game/Environments/THPS3/Suburbia/Goals/Data/suburbia_trick_TheAbyss.suburbia_trick_TheAbyss", (2, 3, 13, GoalType::Pro)),
     ("/Game/Environments/THPS3/Suburbia/Goals/Data/suburbia_ImpressTheSkaters.suburbia_ImpressTheSkaters", (2, 3, 14, GoalType::Pro)),
-    
+
     ("/Game/Environments/THPS3/Airport/Goals/Data/airport_score_high.airport_score_high", (2, 4, 0, GoalType::Normal)),
     ("/Game/Environments/THPS3/Airport/Goals/Data/airport_score_pro.airport_score_pro", (2, 4, 1, GoalType::Normal)),
     ("/Game/Environments/THPS3/Airport/Goals/Data/airport_score_sick.airport_score_sick", (2, 4, 2, GoalType::Normal)),

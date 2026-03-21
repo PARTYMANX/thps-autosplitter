@@ -30,7 +30,3 @@ pub struct Settings {
     #[default = true]
     pub auto_reset_on_close: bool,
 }
-
-impl Settings {
-    
-}
